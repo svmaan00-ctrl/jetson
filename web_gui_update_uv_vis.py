@@ -2,18 +2,22 @@ import cv2
 import os
 import time
 import re
+import json
 from datetime import datetime
 from flask import Flask, render_template_string, Response, request, jsonify
 
 app = Flask(__name__)
 
-# Pfade für Bilder und Spektren
-OUTPUT_DIR = os.path.expanduser('~/inspection_project/data/bilder/')
-SPEKTREN_DIR = os.path.expanduser('~/inspection_project/data/spektren/')
-if not os.path.exists(OUTPUT_DIR): os.makedirs(OUTPUT_DIR)
-if not os.path.exists(SPEKTREN_DIR): os.makedirs(SPEKTREN_DIR)
+# Pfade
+BASE_DIR = os.path.expanduser('~/inspection_project/data/')
+OUTPUT_DIR = os.path.join(BASE_DIR, 'bilder/')
+LOG_DIR = os.path.join(BASE_DIR, 'logs/')
+
+for d in [OUTPUT_DIR, LOG_DIR]:
+    if not os.path.exists(d): os.makedirs(d)
 
 camera = None
+state = {"freeze": False, "last_frame": None}
 
 def init_camera():
     global camera
@@ -25,7 +29,7 @@ def init_camera():
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1024)
         if cap.isOpened():
             ret, frame = cap.read()
-            if ret and frame is not None and frame.size > 0:
+            if ret and frame is not None:
                 camera = cap
                 return True
             else: cap.release()
@@ -33,22 +37,19 @@ def init_camera():
 
 init_camera()
 
-def draw_scale_bar_cv2(image, magnification, factor):
+def draw_scale_bar_cv2(image, cal_factor):
     try:
-        mag = float(magnification)
-        fact = float(factor)
-        if mag <= 0 or fact <= 0: return image
-        pixels_per_mm = mag * fact
-        if mag < 100: bar_len = 1.0; txt = "1 mm"
-        elif mag < 400: bar_len = 0.5; txt = "0.5 mm"
-        else: bar_len = 0.1; txt = "0.1 mm"
-        px_len = int(pixels_per_mm * bar_len)
+        f = float(cal_factor)
         h, w = image.shape[:2]
-        x = w - px_len - 50; y = h - 50
-        cv2.line(image, (x, y), (x + px_len, y), (0,0,0), 6)
-        cv2.line(image, (x, y), (x + px_len, y), (255,255,255), 2)
-        cv2.putText(image, txt, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,0,0), 4)
-        cv2.putText(image, txt, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 1)
+        px_len = int(f) 
+        if px_len <= 0 or px_len > w: return image
+        x1, y = 50, h - 60
+        x2 = x1 + px_len
+        cv2.line(image, (x1, y), (x2, y), (0, 0, 0), 4)
+        cv2.line(image, (x1, y), (x2, y), (255, 255, 255), 2)
+        cv2.line(image, (x1, y-5), (x1, y+5), (255, 255, 255), 2)
+        cv2.line(image, (x2, y-5), (x2, y+5), (255, 255, 255), 2)
+        cv2.putText(image, "1 mm", (x1, y-15), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,255), 1)
         return image
     except: return image
 
@@ -57,108 +58,160 @@ html_code = """
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <title>Jetson Inspection Center</title>
+    <title>Jetson Control Center</title>
     <style>
-        body { background-color: #121212; color: #ddd; font-family: sans-serif; padding: 10px; }
-        .main { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
-        .video-box { border: 2px solid #444; position: relative; flex: 1; min-width: 600px; }
-        .controls { 
-            background: #1e1e1e; padding: 15px; border-radius: 8px; width: 320px; 
-            border: 1px solid #333;
+        * { box-sizing: border-box; }
+        body { 
+            background: #121212; color: #ddd; font-family: 'Segoe UI', sans-serif; 
+            margin: 0; padding: 10px; height: 100vh; width: 100vw; overflow: hidden; 
+            display: flex; flex-direction: column;
         }
-        .status-panel {
-            background: #111; padding: 10px; margin-top: 15px; border-radius: 6px; border: 1px solid #444;
+        .status-bar { 
+            display: flex; gap: 20px; background: #1e1e1e; padding: 8px 15px; 
+            border-bottom: 2px solid #333; margin-bottom: 10px; border-radius: 5px; flex-shrink: 0;
         }
-        .status-item { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 4px; }
-        .led { width: 10px; height: 10px; border-radius: 50%; display: inline-block; background: #333; }
-        .led-green { background: #28a745; box-shadow: 0 0 5px #28a745; }
-        .led-yellow { background: #ffc107; box-shadow: 0 0 5px #ffc107; }
+        .led-group { display: flex; align-items: center; gap: 8px; font-size: 11px; }
+        .led { width: 12px; height: 12px; border-radius: 50%; background: #333; }
+        .orange { background: #ffa500; box-shadow: 0 0 8px #ffa500; }
+        .green { background: #28a745; box-shadow: 0 0 8px #28a745; }
         
-        h2 { border-bottom: 1px solid #555; padding-bottom: 5px; margin: 15px 0 10px 0; color: #fff; font-size: 16px;}
-        h2:first-child { margin-top: 0; }
-        label { display: block; margin-top: 8px; color: #aaa; font-size: 11px; font-weight: bold; }
-        select, input[type="text"], input[type="number"] { 
-            width: 100%; padding: 6px; margin-top: 2px; background: #333; color: white; border: 1px solid #555; box-sizing: border-box; font-size: 13px;
+        .wrapper { display: flex; gap: 15px; flex-grow: 1; min-height: 0; }
+        .sidebar { width: 300px; display: flex; flex-direction: column; gap: 10px; flex-shrink: 0; }
+        
+        .module { background: #1e1e1e; padding: 12px; border-radius: 8px; border: 1px solid #333; }
+        .module-fill { flex-grow: 1; } 
+        
+        h3 { color: #00adb5; font-size: 13px; margin: 0 0 8px 0; border-bottom: 1px dotted #444; padding-bottom: 4px; }
+        
+        label { display: block; margin-top: 8px; font-size: 10px; color: #888; font-weight: bold; }
+        select, input { 
+            width: 100%; padding: 6px; margin-top: 2px; background: #2a2a2a; 
+            color: white; border: 1px solid #444; border-radius: 4px; box-sizing: border-box; font-size: 12px;
         }
-        .radio-box { background: #2a2a2a; padding: 8px; margin-top: 4px; border-radius: 4px; font-size: 12px; border: 1px solid #444; }
-        .btn-save { width: 100%; padding: 12px; margin-top: 15px; background: #28a745; color: white; border: none; font-size: 16px; font-weight: bold; cursor: pointer; border-radius: 6px; }
-        #status { margin-top: 10px; font-family: monospace; color: #0f0; font-size: 11px; }
+        
+        .content { 
+            flex-grow: 1; display: flex; justify-content: center; align-items: center; 
+            background: #000; border-radius: 8px; overflow: hidden; border: 1px solid #333;
+            min-height: 0;
+        }
+        #live-img { 
+            max-width: 100%; max-height: 100%; 
+            object-fit: contain; /* Bild wird verkleinert, um exakt in den Rahmen zu passen */
+        }
+        
+        .action-area { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
+        .btn-freeze { background: #444; color: white; border: none; padding: 12px; cursor: pointer; font-weight: bold; border-radius: 4px; width: 100%; }
+        .btn-freeze.active { background: #d9534f; }
+        .btn-save { background: #28a745; color: white; border: none; padding: 15px; font-size: 16px; font-weight: bold; cursor: pointer; border-radius: 4px; width: 100%; }
+        .btn-x200 { background: #007bff; color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer; margin-top: 8px; width: 100%; }
+        
+        #status-text { font-size: 10px; color: #00ff00; font-family: monospace; text-align: center; min-height: 12px; margin-bottom: 4px; }
     </style>
 </head>
 <body>
-    <div class="main">
-        <div class="controls">
-            <h2>1. System Status</h2>
-            <div class="status-panel">
-                <div class="status-item"><span>Mikroskop (USB)</span> <div class="led led-green"></div></div>
-                <div class="status-item"><span>SSH Tunnel</span> <div class="led led-green"></div></div>
-                <div class="status-item"><span>X200 UV-Vis</span> <div id="led-x200" class="led"></div></div>
-            </div>
 
-            <h2>2. Proben-Info</h2>
-            <label>Bezeichnung:</label>
-            <input type="text" id="sample_name" value="Probe_01">
-            <label>Ort / Position:</label>
-            <input type="text" id="location" value="Zentrum">
-            <label>Probenart:</label>
-            <select id="sample_type">
+<div class="status-bar">
+    <div class="led-group">MIC: <div id="led-mic" class="led orange"></div></div>
+    <div class="led-group">SPEC: <div id="led-x200" class="led orange"></div></div>
+    <div class="led-group">SYS: <div id="led-sys" class="led green"></div></div>
+</div>
+
+<div class="wrapper">
+    <div class="sidebar">
+        <div class="module">
+            <h3>1. Proben-Identifikation</h3>
+            <label>Typ</label>
+            <select id="p_type">
                 <option value="B">Bohrprobe (B)</option>
                 <option value="W">Wischprobe (W)</option>
-                <option value="M">Material (M)</option>
-                <option value="Ref">Referenz</option>
+                <option value="M">Materialprobe (M)</option>
+                <option value="R">Referenz (R)</option>
             </select>
-
-            <h2>3. Mikroskop</h2>
-            <label style="color: #ffc107;">Zoom (Rädchen):</label>
-            <input type="number" id="zoom" value="50">
-            <div class="radio-box">
-                Licht: <label><input type="radio" name="light" value="R" checked> R</label> 
-                       <label><input type="radio" name="light" value="C"> C</label> 
-                       <label><input type="radio" name="light" value="S"> S</label> | 
-                Pol: <label><input type="radio" name="pol" value="P0" checked> Off</label> 
-                     <label><input type="radio" name="pol" value="P1"> On</label>
-            </div>
-
-            <h2>4. Spektrometer (X200)</h2>
-            <div class="radio-box">
-                Modus: <label><input type="radio" name="mode" value="AU" checked> AU</label> 
-                       <label><input type="radio" name="mode" value="TR"> %T:R</label> 
-                       <label><input type="radio" name="mode" value="Scope"> Scope</label>
-            </div>
-
-            <button class="btn-save" onclick="snap()">MESSUNG SPEICHERN</button>
-            <div id="status">Bereit.</div>
+            <label>Bezeichnung</label>
+            <input type="text" id="p_name" value="Probe_01">
+            <label>Ort / Position</label>
+            <input type="text" id="p_pos" value="Zentrum">
         </div>
 
-        <div class="video-box">
-            <img id="live-img" src="{{ url_for('video_feed') }}" width="100%">
+        <div class="module">
+            <h3>2. Optik & Kalibrierung</h3>
+            <label>Lichtquelle</label>
+            <select id="m_light">
+                <option value="R">Ring (R)</option><option value="C">Coax (C)</option>
+                <option value="S">Side (S)</option><option value="O">AUS (O)</option>
+            </select>
+            <label>Polarisation</label>
+            <select id="m_pol">
+                <option value="P0">Off</option><option value="P1">On</option>
+            </select>
+            <label>Kalibrierung (px/mm)</label>
+            <input type="number" id="cal_factor" value="244">
+        </div>
+
+        <div class="module">
+            <h3>3. Spektrometer</h3>
+            <label>Messmodus</label>
+            <select id="x_mode">
+                <option value="A">Absorbance (A)</option>
+                <option value="T">Transmission (T)</option>
+                <option value="S">Scope Mode (S)</option>
+            </select>
+            <button class="btn-x200" onclick="transferX200()">X200 DATEN-TRANSFER</button>
+        </div>
+
+        <div class="module-fill"></div>
+
+        <div class="module action-area">
+            <div id="status-text">System bereit</div>
+            <button id="freeze-btn" class="btn-freeze" onclick="toggleFreeze()">STANDBILD</button>
+            <button class="btn-save" onclick="saveSnapshot()">MESSUNG SPEICHERN</button>
         </div>
     </div>
 
-    <script>
-        function snap() {
-            let data = {
-                type: document.getElementById('sample_type').value,
-                name: document.getElementById('sample_name').value,
-                loc: document.getElementById('location').value,
-                zoom: document.getElementById('zoom').value,
-                pol: document.querySelector('input[name="pol"]:checked').value,
-                light: document.querySelector('input[name="light"]:checked').value,
-                mode: document.querySelector('input[name="mode"]:checked').value,
-                factor: 2.44
-            };
+    <div class="content">
+        <img id="live-img" src="{{ url_for('video_feed') }}">
+    </div>
+</div>
 
-            document.getElementById('led-x200').className = 'led led-yellow';
-            
-            fetch('/snapshot', {
-                method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)
-            })
-            .then(r => r.json()).then(d => { 
-                document.getElementById('status').innerText = "Gespeichert: " + d.filename;
-                setTimeout(() => { document.getElementById('led-x200').className = 'led'; }, 3000);
-            });
-        }
-    </script>
+<script>
+    let frozen = false;
+    function toggleFreeze() {
+        frozen = !frozen;
+        const btn = document.getElementById('freeze-btn');
+        btn.classList.toggle('active', frozen);
+        btn.innerText = frozen ? "STANDBILD AKTIV" : "STANDBILD";
+        fetch('/toggle_freeze', {method: 'POST'});
+    }
+
+    function saveSnapshot() {
+        const data = {
+            type: document.getElementById('p_type').value,
+            name: document.getElementById('p_name').value,
+            pos: document.getElementById('p_pos').value,
+            light: document.getElementById('m_light').value,
+            pol: document.getElementById('m_pol').value,
+            cal: document.getElementById('cal_factor').value
+        };
+        document.getElementById('status-text').innerText = "Speichere...";
+        fetch('/snapshot', {
+            method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)
+        }).then(r => r.json()).then(d => {
+            document.getElementById('led-mic').className = 'led green';
+            document.getElementById('status-text').innerText = "OK: " + d.filename;
+            setTimeout(() => { 
+                document.getElementById('led-mic').className = 'led orange'; 
+                document.getElementById('status-text').innerText = "Bereit für nächste Messung";
+            }, 3000);
+        });
+    }
+
+    function transferX200() {
+        document.getElementById('led-x200').className = 'led orange';
+        fetch('/x200_transfer', {method: 'POST'}).then(() => {
+            document.getElementById('led-x200').className = 'led green';
+        });
+    }
+</script>
 </body>
 </html>
 """
@@ -168,42 +221,45 @@ def index(): return render_template_string(html_code)
 
 @app.route('/video_feed')
 def video_feed():
-    def generate_frames():
-        global camera
+    def generate():
         while True:
-            if camera is None or not camera.isOpened(): time.sleep(2); init_camera()
-            if camera and camera.isOpened():
+            if not state["freeze"]:
                 success, frame = camera.read()
-                if success:
-                    ret, buffer = cv2.imencode('.jpg', frame)
-                    if ret: yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
-    return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+                if success: state["last_frame"] = frame.copy()
+            
+            if state["last_frame"] is not None:
+                img_display = state["last_frame"].copy()
+                if state["freeze"]:
+                    img_display = draw_scale_bar_cv2(img_display, 244)
+                
+                ret, buffer = cv2.imencode('.jpg', img_display)
+                yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+            time.sleep(0.04)
+    return Response(generate(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+@app.route('/toggle_freeze', methods=['POST'])
+def toggle_freeze():
+    state["freeze"] = not state["freeze"]
+    return jsonify(status="ok")
 
 @app.route('/snapshot', methods=['POST'])
 def snapshot():
-    global camera
-    if camera and camera.isOpened():
-        ret, frame = camera.read()
-        if ret:
-            d = request.json
-            s_name = re.sub(r'[^a-zA-Z0-9_-]', '', d['name'])
-            s_loc = re.sub(r'[^a-zA-Z0-9_-]', '', d['loc'])
-            ts = datetime.now().strftime("%y%m%d_%H%M%S")
-            
-            # Bild Name (MIT ZOOM)
-            img_file = f"{ts}_{d['type']}_{s_name}_{s_loc}_{d['zoom']}x_{d['pol']}_{d['light']}.jpg"
-            # Spektrum Name (OHNE ZOOM)
-            spec_ref = f"{ts}_{d['type']}_{s_name}_{s_loc}_{d['mode']}.txt"
-            
-            frame_with_scale = draw_scale_bar_cv2(frame, d['zoom'], d.get('factor', 2.44))
-            cv2.imwrite(os.path.join(OUTPUT_DIR, img_file), frame_with_scale)
-            
-            # Erstellt eine leere Info-Datei für die Spektren-Zuordnung
-            with open(os.path.join(SPEKTREN_DIR, spec_ref), "w") as f:
-                f.write(f"Warte auf X200 Datei für: {img_file}")
+    if state["last_frame"] is not None:
+        d = request.json
+        ts = datetime.now().strftime("%y%m%d_%H%M")
+        fname = f"{ts}_{d['type']}_{d['name']}_{d['pos']}_{d['light']}_{d['pol']}.jpg"
+        img = state["last_frame"].copy()
+        img = draw_scale_bar_cv2(img, d['cal'])
+        cv2.imwrite(os.path.join(OUTPUT_DIR, fname), img)
+        with open(os.path.join(LOG_DIR, fname.replace(".jpg", ".json")), "w") as f:
+            json.dump(d, f)
+        return jsonify(filename=fname)
+    return jsonify(error="no frame")
 
-            return jsonify(filename=img_file)
-    return jsonify(error="Error")
+@app.route('/x200_transfer', methods=['POST'])
+def x200_transfer():
+    time.sleep(0.5)
+    return jsonify(success=True)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5000, threaded=True)
