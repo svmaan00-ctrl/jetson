@@ -22,7 +22,7 @@ HTML_FILE = os.path.join(PROJECT_ROOT, "index.html")
 DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 
 # Verzeichnisse für die strukturierte Ablage erstellen
-for sub in ['bilder', 'spektren', 'umgebung', 'logs']:
+for sub in ['mikroskopbilder', 'spektren', 'umgebung', 'logs']:
     os.makedirs(os.path.join(DATA_DIR, sub), exist_ok=True)
 
 # --- GLOBALER STATUS ---
@@ -149,7 +149,7 @@ def snapshot():
         ts = datetime.now().strftime("%y%m%d_%H%M%S")
         fname = f"{ts}_{d['type']}_{d['name']}_{d['pos']}_{d['light']}_{d['pol']}.jpg"
         # Bild ist bereits mit Maßstab versehen durch den Video-Feed
-        cv2.imwrite(os.path.join(DATA_DIR, 'bilder', fname), state["last_frame"])
+        cv2.imwrite(os.path.join(DATA_DIR, 'mikroskopbilder', fname), state["last_frame"])
         return jsonify(filename=fname)
     return jsonify(error="no frame")
 
