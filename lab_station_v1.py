@@ -16,7 +16,7 @@ except ImportError:
 
 app = Flask(__name__)
 
-# --- PFADE UND ORDNER ---
+# --- KONFIGURATION & PFADE ---
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 HTML_FILE = os.path.join(PROJECT_ROOT, "index.html")
 DATA_DIR = os.path.join(PROJECT_ROOT, "data")
@@ -30,7 +30,8 @@ camera = None
 state = {
     "freeze": False,      # Status für Standbild-Modus
     "last_frame": None,   # Aktueller Frame für die Anzeige
-    "cal_factor": 100,    # Pixel pro Millimeter
+    "cal_factor": 115.0,   # <--- HIER IST 115 (Cal_Startwert)
+    "mic_data": {},       # Platzhalter für Mikrofon/Bild-Daten
     "arduino": { "t1": "-", "h1": "-", "t2": "-", "h2": "-", "gas": "-", "alarm": "Init" }
 }
 
@@ -81,31 +82,40 @@ def draw_scale_bar(image, cal_factor):
         h, w = image.shape[:2]
         px_len = int(f) # Länge von 1mm in Pixeln
         
-        # Positionierung rechts unten (ca. 50px Abstand vom Rand)
+        # Positionierung rechts unten
         margin = 50
         x2 = w - margin
         x1 = x2 - px_len
         y = h - 60
         
-        # Zeichnung der Doppellinie (Schwarz für Schatten, Weiß für Sichtbarkeit)
+        # 1. LINIE: Schatten (schwarz, dicker) und Hauptlinie (weiß)
         cv2.line(image, (x1, y), (x2, y), (0, 0, 0), 4)
         cv2.line(image, (x1, y), (x2, y), (255, 255, 255), 2)
-        cv2.line(image, (x1, y-5), (x1, y+5), (255, 255, 255), 2) # Abschlussstrich links
-        cv2.line(image, (x2, y-5), (x2, y+5), (255, 255, 255), 2) # Abschlussstrich rechts
         
-        # Text-Zentrierung: Berechnung der Textbreite
+        # 2. ABSCHLUSSSTRICHE (Vertikal)
+        cv2.line(image, (x1, y-5), (x1, y+5), (255, 255, 255), 2)
+        cv2.line(image, (x2, y-5), (x2, y+5), (255, 255, 255), 2)
+        
+        # 3. TEXT: "1 mm" vorbereiten
         text = "1 mm"
         font = cv2.FONT_HERSHEY_SIMPLEX
         scale = 0.6
         thickness = 1
-        text_size = cv2.getTextSize(text, font, scale, thickness)[0]
-        text_x = x1 + (px_len - text_size[0]) // 2 # Mittige Positionierung über der Linie
         
-        cv2.putText(image, text, (text_x, y-15), font, scale, (255, 255, 255), thickness)
+        # Text-Zentrierung berechnen
+        text_size = cv2.getTextSize(text, font, scale, thickness)[0]
+        text_x = x1 + (px_len - text_size[0]) // 2
+        
+        # 4. TEXT-SCHATTEN (Schwarz) für Lesbarkeit auf hellem Grund
+        cv2.putText(image, text, (text_x + 1, y - 14), font, scale, (0, 0, 0), thickness + 1)
+        # 5. TEXT-HAUPTZEILE (Weiß)
+        cv2.putText(image, text, (text_x, y - 15), font, scale, (255, 255, 255), thickness)
+        
         return image
     except Exception as e:
-        print(f"Fehler Maßstab: {e}")
+        # Im professionellen Betrieb nur Error-Logging, kein Crash
         return image
+
 
 # --- ROUTEN ---
 @app.route('/')

@@ -22,15 +22,15 @@
         .row { display: flex; gap: 4px; }
         .col { flex: 1; }
 
-        /* SENSORDATEN: Exakte Abstände und Einheiten */
+        /* SENSORDATEN: Exakte Abstände und Einheiten - KORRIGIERT: Helligkeit gedimmt auf #bbbbbb */
         .sensor-container { display: flex; flex-direction: column; gap: 4px; margin-top: 2px; }
         .sensor-label { color: #777; font-size: 9px; font-weight: bold; white-space: pre; }
-        .sensor-val { flex: 1; text-align: left; font-family: monospace; font-weight: bold; color: #fff; font-size: 11px; }
+        .sensor-val { flex: 1; text-align: left; font-family: monospace; font-weight: bold; color: #bbbbbb; font-size: 11px; }
 
-        /* STATUS UND GAS: Einheitliche Schriftgröße 11px für Werte, 9px für Status-Box */
+        /* STATUS UND GAS: Einheitliche Schriftgröße 11px für Werte (KORRIGIERT: #bbbbbb), 9px für Status-Box */
         .status-row { margin-top: 4px; display: flex; justify-content: space-between; align-items: center; background: #252525; padding: 3px 5px; border-radius: 3px; border: 1px solid #333; }
-        .status-val-box { font-size: 9px; font-weight: bold; padding: 1px 6px; border-radius: 2px; text-transform: uppercase; }
-
+        .status-val-box { font-size: 9px; font-weight: bold; padding: 1px 6px; border-radius: 2px; text-transform: uppercase; color: #bbbbbb; }
+        
         /* LEDS */
         .status-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px; background: #000; padding: 5px; border-radius: 4px; border: 1px solid #333; }
         .led-item { display: flex; flex-direction: column; align-items: center; font-size: 9px; color: #aaa; }
@@ -73,7 +73,7 @@
                 <div class="col"><label>Licht</label><select id="m_light"><option value="R">Ring</option><option value="C">Coax</option><option value="S">Side</option><option value="O">Off</option></select></div>
                 <div class="col"><label>Pol</label><select id="m_pol"><option value="P0">Aus</option><option value="P1">Ein</option></select></div>
             </div>
-            <label>Cal (px/mm)</label><input type="number" id="cal_factor" value="100" oninput="updateCal()">
+            <label>Cal (px/mm)</label><input type="number" id="cal_factor" value="115" oninput="updateCal()">
         </div>
 
         <div class="module">
@@ -93,12 +93,12 @@
                 </div>
             </div>
             <div id="gas-row" class="status-row">
-                <span style="font-size:9px">GAS:  </span>
-                <span id="val-gas" style="font-weight:bold; font-family:monospace; font-size:11px; color:#fff;">--</span>
+                <span style="font-size:9px; color:#777; font-weight:bold;">GAS:  </span>
+                <span id="val-gas" style="font-weight:bold; font-family:monospace; font-size:11px; color:#bbbbbb;">--</span>
             </div>
             <div class="status-row">
-                <span style="font-size:9px">STATUS:  </span>
-                <span id="val-alarm" class="status-val-box">INIT</span>
+                <span style="font-size:9px; color:#777; font-weight:bold;">STATUS:  </span>
+                <span id="val-alarm" class="status-val-box" style="color:#bbbbbb;">INIT</span>
             </div>
         </div>
 
