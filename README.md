@@ -1,83 +1,188 @@
-📋 Projekt-Dokumentation: Lab_station_v1 (V_02)
-Status: Aktiv / GUI Fertiggestellt
+📋 Projekt-Dokumentation: Lab_station_v1 ➔ v2 Upgrade
+Version: v1.5 (Transition to v2)
 
-Hardware: Jetson Board, USB-Kamera (V4L2), Arduino (Sensor-Bridge)
+Status: AP 1 Abgeschlossen / Entwicklung aktiv
 
-📂 1. Verzeichnisstruktur
-Alle Dateien befinden sich im Hauptverzeichnis zur Vermeidung von Pfadfehlern:
+Entwickler: Lab-Station-Experte (Jetson Dev)
 
-~/inspection_project/
+1. System-Übersicht
+Kombiniertes Inspektionssystem (Mikroskopie & UV-VIS Spektrometrie) auf einem Jetson Nano/Xavier.
 
-lab_station_v1.py – Hauptprogramm (Backend: Flask, CV2, Serial)
+Hardware: Jetson Board, USB-Kamera (V4L2, MJPG), Arduino (Sensor-Bridge via Serial).
 
-index.html – Benutzeroberfläche (Frontend: HTML, CSS, JS)
+Architektur: Modularer Aufbau. Quellcode in /src/, Daten in /data/.
 
-spec_watcher.py – Hintergrunddienst für Spektrometer-Daten
+2. Verzeichnisstruktur (Ist-Zustand)
+Plaintext
 
-README.md – Diese Dokumentation
+/home/jetson/inspection_project/
+├── README.md                # Projekt-Dokumentation
+├── src/                     # Quellcode & Frontend
+│   ├── lab_station_v1.py    # Hauptprogramm (Backend)
+│   ├── index.html           # Benutzeroberfläche (Frontend)
+│   ├── config.py            # System-Konfiguration
+│   └── spec_watcher.py      # Hintergrunddienst für Spektrometer-Daten
+└── data/                    # Zentraler Datenspeicher
+    ├── bilder/              # Assets
+    ├── mikroskopbilder/     # Aktuelle JPG-Aufnahmen
+    ├── spektren/            # Aktuelle CSV/Txt Spektrendaten
+    ├── logs/                # Systemlogs
+    ├── sensordaten/         # Arduino-Logs
+    ├── x200_rohdaten_eingang/    # [NEU] Watch-Folder für WinSCP
+    ├── x200_spektren_ergebnisse/ # [NEU] Prozessierte Plots
+    ├── archivierte_spektren/     # [NEU] Archiv Spektren
+    └── archivierte_mikroskopbilder/ # [NEU] Archiv Bilder
+3. System-Steuerung (Aliase aus .bashrc)
+# --- JETSON OPTIMIERUNG & PROJEKT ---
+alias monitoraus='sudo systemctl set-default multi-user.target && sudo reboot'
 
-/data/ – Zentraler Datenspeicher
+alias monitoran='sudo systemctl set-default graphical.target && sudo reboot'
 
-/mikroskopbilder/ – JPG-Aufnahmen
+# Projekt-Steuerung (Industrie-Standard)
+alias systemstart="python3 ~/inspection_project/src/spec_watcher.py & python3 ~/inspection_project/src/lab_station_v1.py"
 
-/spektren/ – CSV/Txt Spektrendaten
+alias systemreset="fuser -k 5000/tcp; pkill -f spec_watcher.py; pkill -f lab_station_v1.py; sudo udevadm trigger"
 
-/logs/ – JSON-Metadaten zu Snapshots
+alias systemaus='sudo shutdown -h now'
 
-🚀 2. System-Steuerung (Aliase)
-Bedienung über das Terminal mittels vordefinierter Kurzbefehle:
+alias systemreboot='sudo reboot'
 
-Projekt-Management
-system_start : Startet Backend & Spec-Watcher (Headless/Background)
+# Daten-Zugriff
+alias mikroskopbilder='ls -l ~/inspection_project/data/mikroskopbilder/'
 
-system_reset : Killt Prozesse auf Port 5000 & resetet USB-Ports (udev)
+alias spektren='ls -l ~/inspection_project/data/spektren/'
 
-system_aus : Fährt den Jetson sicher herunter
+# System-Check
+alias ramcheck='ps -e -o rss,command | grep node | awk "{print \$1/1024 \" MB\", \$2}" | sort -nr | head -n 10'
 
-system_reboot: Startet das System neu
+# Kamera-Informationen
+alias caminfo='v4l2-ctl --list-formats-ext -d /dev/video0'
 
-Jetson-Optimierung
-monitor_aus : Deaktiviert Desktop-GUI (spart RAM) -> Reboot in Konsole
+4. Vollständiger Projektplan: Lab_station_v2 Upgrade
 
-monitor_an : Aktiviert Desktop-GUI -> Reboot in Desktop-Modus
+"AP 1 ist in Arbeit"
+Ordnerstruktur steht, pandas, matplotlib wurde installiert und schreibrechte vergeben
 
-ram_check : Zeigt die Top 10 RAM-Verbraucher (Fokus auf Node/Background)
+ 📦 AP 1: Infrastruktur & Environment Setup
+Ziel: Vorbereitung der Umgebung auf dem Jetson, um Schreibkonflikte und Pfad-Fehler zu vermeiden.
 
-Daten-Zugriff
-mikroskopbilder : Schnelle Liste aller gespeicherten Bilder
+[x] Verzeichnisstruktur härten:
 
-spektren : Schnelle Liste aller Spektren-Dateien
+[x] Anlegen von /home/jetson/inspection_project/data/x200_rohdaten_eingang/ (Lese- & Schreibrechte für Flask und WinSCP-User).
 
-🎨 3. UI-Spezifikationen & Design
-Design: Rein schwarzer Hintergrund, weiße Schrift.
+[x] Anlegen von /home/jetson/inspection_project/data/archivierte_spektren/.
 
-Präzision: Sensorwerte mit exakt zwei Leerzeichen nach dem Doppelpunkt (Temperatur: 24.5°C).
+[x] Anlegen von /home/jetson/inspection_project/data/archivierte_mikroskopbilder/.
 
-Buttons: Beschriftung in Großbuchstaben (BILDDATEI SPEICHERN).
+[ ] WinSCP-Konfiguration validieren:
 
-📏 4. Mess- & Speicherlogik
-1mm-Maßstab:
+[ ] Verifizierung der Client-Einstellung "Transfer to temporary filename" (Erzeugung von .filepart), um die Atomarität beim Upload sicherzustellen.
 
-Position: Unten rechts im Bild.
+[x] Bibliotheken installieren:
 
-Label: "1 mm" steht exakt mittig über der Linie zentriert.
+[x] pip3 install watchdog
 
-Funktion: Nur im "Freeze"-Modus zur Referenzierung eingeblendet.
+[x] pip3 install opencv-python-headless (Wichtig: Headless-Version zur Vermeidung von X11-Konflikten).
 
-Namensschema:
+[x] pip3 install pandas matplotlib (Für das Processing in AP 3).
 
-Format: Zeit_Typ_ID_Position.jpg
+📦 AP 2: Backend Core – Ingestion & State Management
+Ziel: Robuste Erkennung neuer Dateien ohne Blockieren des Haupt-Threads.
 
-Beispiel: 20251226_1300_UV_001_A.jpg
+[ ] Global State Manager (Singleton):
 
-🛠 5. Wartung
-Nach Änderungen an der .bashrc immer source ~/.bashrc ausführen.
+[ ] Implementierung der Klasse DataManager in src/data_manager.py.
 
-Bei Hardware-Hängern (Kamera/Sensoren) zuerst system_reset nutzen.
+[ ] Einbau von threading.Lock() für thread-sicheren Zugriff auf den aktuellen DataFrame und Status.
 
-Das Backend findet die index.html automatisch im selben Verzeichnis via os.path.abspath.
+[ ] Watchdog-Service:
 
-🚧 6. Offene Punkte / To-Do
-Silent Logging umsetzen: Das Flask-Terminal spammt aktuell noch 200 OK Nachrichten. Dies muss noch auf logging.ERROR (Silent Mode) umgestellt werden, um die Shell übersichtlich zu halten. Maßstab muss entsprechend der Vergrößerung kalibriert werden da aktuell eine Einpunktkalibrierung vor Messbeginn eingemessen werden muss und bei anpassen der Vergrößerung dieser dann nicht mehr stimmt.
+[ ] Implementierung des PatternMatchingEventHandler in src/file_monitor.py.
 
-Entwickler-Notiz: Pragmatische Struktur. Trennung von Backend und Frontend ist zwingend. Code muss im Code exakt beschrieben sein
+[ ] Logik: Ignorieren von .filepart. Trigger nur bei on_moved (Umbenennung zu .csv) oder on_created (ohne .filepart).
+
+[ ] Integration von "Debouncing" (kurze Wartezeit vor dem Einlesen).
+
+📦 AP 3: Backend Processing – Parsing & Rendering
+Ziel: Umwandlung von CSV-Rohdaten in valide Plots, isoliert vom Video-Stream.
+
+[ ] CSV-Parser (Pandas):
+
+[ ] Entwicklung der Header-Erkennung (Suche nach "Wavelength"/"Absorbance" in den ersten 20 Zeilen).
+
+[ ] Implementierung von pd.read_csv mit Fehlerbehandlung für unvollständige Dateien.
+
+[ ] Plotting Engine (Matplotlib):
+
+[ ] Konfiguration des Agg-Backends (Headless Rendering).
+
+[ ] Erstellung der Funktion create_plot(), die ein PNG als Byte-Stream (io.BytesIO) zurückgibt.
+
+[ ] Caching-Logik:
+
+[ ] Implementierung: Plot wird nur neu berechnet, wenn sich der Zeitstempel der Quelldatei ändert.
+
+📦 AP 4: Backend API & Video Stream (Flask)
+Ziel: Bereitstellung der Endpunkte und Zusammenführung der Subsysteme.
+
+[ ] Video-Route (/video_feed):
+
+[ ] Bestehenden MJPEG-Generator beibehalten.
+
+[ ] Sicherstellen: 1mm-Skala-Overlay bleibt erhalten (unten rechts, Label zentriert).
+
+[ ] Spektrum-Route (/spectrum_plot.png):
+
+[ ] Auslieferung des gecachten PNGs aus AP 3.
+
+[ ] Steuerungs-API:
+
+[ ] /api/status: JSON-Response mit aktuellem Dateinamen und Timestamp.
+
+[ ] /api/save: Implementierung der Kontext-Logik (Unterscheidung context: 'video' vs. context: 'spectrum').
+
+[ ] Naming Scheme:
+
+[ ] Striktes Format Zeit_Typ_ID_... beim Speichern/Archivieren erzwingen.
+
+📦 AP 5: Frontend – Dashboard & Interaktion
+Ziel: Sauberes User-Interface ohne externe Frameworks (Vanilla JS).
+
+[ ] Layout & UI:
+
+[ ] Anpassung der src/index.html.
+
+[ ] Einbau des "Toggle Switch" (CSS Checkbox) zum Umschalten zwischen Video und Plot.
+
+[ ] Präzision in UI:
+
+[ ] Formatierung der Sensor-Readouts prüfen (zwei Leerzeichen nach Doppelpunkt).
+
+[ ] State Machine (JS):
+
+[ ] Logik für currentMode.
+
+[ ] Video-Modus: src="/video_feed".
+
+[ ] Spektrum-Modus: src="/spectrum_plot.png" + Start Polling (setInterval) auf /api/status.
+
+[ ] Implementierung Cache-Busting (?t=...) beim Bild-Refresh.
+
+[ ] Save-Button:
+
+[ ] Anbindung an fetch('/api/save') mit dynamischem JSON-Payload.
+
+📦 AP 6: Integration & Logging
+Ziel: Systemstabilität und Fehlerverfolgung.
+
+[ ] Logging-Konfiguration:
+
+[ ] Flask-Logging auf ERROR beschränken (Silent Logs).
+
+[ ] Separates File-Logging für den Watchdog-Dienst.
+
+[ ] Integrationstests:
+
+[ ] Test des "Race Condition"-Szenarios: WinSCP-Upload während aktivem Video-Streaming.
+
+[ ] Überprüfung der Toggle-Logik: Stoppt der Video-Traffic im Browser bei Modus-Wechsel?
