@@ -1,3 +1,119 @@
+Projektstruktur: Lab_station_v2 Upgrade
+
+📦 AP 1: Infrastruktur & Environment Setup
+Ziel: Vorbereitung der Umgebung auf dem Jetson, um Schreibkonflikte und Pfad-Fehler zu vermeiden.
+
+Verzeichnisstruktur härten:
+
+Anlegen von /data/x200_rohdaten_eingang/ (Nur Lese-Rechte für Flask, Schreibrechte für WinSCP-User).
+
+Anlegen von /data/archived_spectra/ und /data/saved_snapshots/.
+
+WinSCP-Konfiguration validieren:
+
+Verifizierung der Client-Einstellung "Transfer to temporary filename" (Erzeugung von .filepart), um die Atomarität sicherzustellen.
+
+Bibliotheken:
+
+Installation von watchdog und opencv-python-headless (Wichtig: Headless-Version auf Jetson nutzen, um X11-Konflikte zu vermeiden).
+
+📦 AP 2: Backend Core – Ingestion & State Management
+Ziel: Robuste Erkennung neuer Dateien ohne Blockieren des Haupt-Threads (Global State Manager).
+
+Global State Manager (Singleton):
+
+Implementierung der Klasse DataManager in src/data_manager.py.
+
+Einbau von threading.Lock() für thread-sicheren Zugriff auf den aktuellen DataFrame und Status.
+
+Watchdog-Service:
+
+Implementierung des PatternMatchingEventHandler in src/file_monitor.py.
+
+Logik: Ignorieren von .filepart. Trigger nur bei on_moved (wenn Umbenennung zu .csv erfolgt) oder on_created (ohne .filepart).
+
+Integration des "Debouncing" (kurze Wartezeit), falls das Dateisystem noch Metadaten schreibt.
+
+📦 AP 3: Backend Processing – Parsing & Rendering
+Ziel: Umwandlung von CSV-Rohdaten in valide Plots, isoliert vom Video-Stream.
+
+CSV-Parser (Pandas):
+
+Entwicklung der Header-Erkennungslogik (Suche nach Keywords "Wavelength"/"Absorbance" in den ersten 20 Zeilen).
+
+Implementierung der pd.read_csv Logik mit Fehlerbehandlung für "schmutzige" CSVs.
+
+Plotting Engine (Matplotlib):
+
+Konfiguration des Agg-Backends (Headless Rendering).
+
+Erstellung der Funktion create_plot(), die ein PNG als Byte-Stream (io.BytesIO) zurückgibt.
+
+Caching: Implementierung, dass der Plot nur neu berechnet wird, wenn sich der Zeitstempel der Quelldatei ändert.
+
+📦 AP 4: Backend API & Video Stream (Flask)
+Ziel: Bereitstellung der Endpunkte für das Frontend und Zusammenführung der Subsysteme.
+
+Video-Route (/video_feed):
+
+Bestehenden MJPEG-Generator beibehalten.
+
+Reminder: Sicherstellen, dass das 1mm-Skala-Overlay im Video-Stream erhalten bleibt (Bottom-Right, zentriertes Label).
+
+Spektrum-Route (/spectrum_plot.png):
+
+Auslieferung des gecachten PNGs aus AP 3.
+
+Steuerungs-API:
+
+/api/status: JSON-Response mit aktuellem Dateinamen und Timestamp (für Polling).
+
+/api/save: Implementierung der Kontext-Logik. Unterscheidung anhand des JSON-Payloads (context: 'video' vs. context: 'spectrum').
+
+Naming Scheme: Durchsetzung des Schemas Time_Type_ID_... beim Speichern/Archivieren.
+
+📦 AP 5: Frontend – Dashboard & Interaktion
+Ziel: Sauberes HTML/JS Interface ohne externe Frameworks (Vanilla JS).
+
+Layout & UI:
+
+Anpassung der index.html.
+
+Implementierung des "Toggle Switch" (CSS Checkbox) zum Umschalten zwischen Video und Plot.
+
+Präzision: Sicherstellen, dass Sensor-Readouts (falls vorhanden) exakt formatiert sind (zwei Leerzeichen nach Doppelpunkt).
+
+State Machine (JS):
+
+Logik für currentMode (Video vs. Spektrum).
+
+Video-Modus: Setzen von src="/video_feed".
+
+Spektrum-Modus: Setzen von src="/spectrum_plot.png" und Starten des Pollings (setInterval) auf /api/status.
+
+Implementierung des Cache-Busting (?t=...) beim Neuladen des Plots.
+
+Save-Button:
+
+Anbindung an fetch('/api/save') mit dynamischem Kontext-Payload.
+
+📦 AP 6: Integration & Logging
+Ziel: Systemstabilität und Fehlerverfolgung.
+
+Logging-Konfiguration:
+
+Flask-Logging auf ERROR beschränken (Silent Logs).
+
+Separates File-Logging für den Watchdog (z.B. "Neue CSV erkannt", "Parsing Fehler").
+
+Integrationstest:
+
+Testen des "Race Conditions"-Szenarios: Upload einer großen CSV via WinSCP bei gleichzeitigem Video-Streaming.
+
+Testen der Toggle-Logik: Stoppt der Video-Traffic im Browser wirklich, wenn auf Spektrum geschaltet wird?
+
+
+
 Technische Spezifikation und Implementierungsbericht: Erweiterung der Laborstation V1 zur UV-VIS-Spektroskopie-Integration
 
 1. Management Summary und Projektdefinition

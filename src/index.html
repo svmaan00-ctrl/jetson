@@ -166,11 +166,18 @@
 
     function saveSpec() {
         const d = { 
-            type: document.getElementById('p_type').value, name: document.getElementById('p_name').value, 
+            type: document.getElementById('p_type').value, 
+            name: document.getElementById('p_name').value, 
+            pos:  document.getElementById('p_pos').value,   // <--- Das ist neu
             mode: document.getElementById('x_mode').value 
         };
+        
+        // Senden der Daten an Python
         fetch('/save_spectro', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(d) })
-        .then(() => { flashLed('led-spec'); document.getElementById('status-text').innerText = "DATEI GESPEICHERT"; });
+        .then(() => { 
+            flashLed('led-spec'); 
+            document.getElementById('status-text').innerText = "DATEI GESPEICHERT"; 
+        });
     }
 
     function flashLed(id) { 

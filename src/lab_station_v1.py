@@ -4,7 +4,11 @@ import time
 import json
 import threading
 from datetime import datetime
-from flask import Flask, render_template_string, Response, request, jsonify
+from flask import Flask, render_template, Response, request, jsonify
+
+# --- NEU: Konfiguration importieren ---
+# Das setzt voraus, dass config.py im selben Ordner liegt
+from config import *
 
 # --- INITIALISIERUNG DER SCHNITTSTELLEN ---
 try:
@@ -14,24 +18,32 @@ try:
 except ImportError:
     SERIAL_AVAILABLE = False
 
-app = Flask(__name__)
+# --- FLASK SETUP ---
+# Wir nutzen die Pfade aus der Config für Templates (HTML) und Static (CSS/JS)
+app = Flask(__name__, 
+            template_folder=TEMPLATE_FOLDER, 
+            static_folder=STATIC_FOLDER)
 
-# --- KONFIGURATION & PFADE ---
-PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
-HTML_FILE = os.path.join(PROJECT_ROOT, "index.html")
-DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 
-# Verzeichnisse für die strukturierte Ablage erstellen
-for sub in ['mikroskopbilder', 'spektren', 'umgebung', 'logs']:
-    os.makedirs(os.path.join(DATA_DIR, sub), exist_ok=True)
+# --- ORDNER STRUKTUR SICHERSTELLEN ---
+required_folders = [
+    UPLOAD_FOLDER_RAW, 
+    SNAPSHOT_FOLDER,   
+    ARCHIVE_FOLDER,    
+    LOG_FOLDER         
+]
+
+for folder in required_folders:
+    os.makedirs(folder, exist_ok=True)
+    print(f"[Init] Ordner geprüft/erstellt: {folder}")
 
 # --- GLOBALER STATUS ---
 camera = None
 state = {
     "freeze": False,      # Status für Standbild-Modus
     "last_frame": None,   # Aktueller Frame für die Anzeige
-    "cal_factor": 115.0,   # <--- HIER IST 115 (Cal_Startwert)
-    "mic_data": {},       # Platzhalter für Mikrofon/Bild-Daten
+    "cal_factor": 115.0,  # Standard-Kalibrierung
+    "mic_data": {},       # Platzhalter
     "arduino": { "t1": "-", "h1": "-", "t2": "-", "h2": "-", "gas": "-", "alarm": "Init" }
 }
 
@@ -63,13 +75,17 @@ threading.Thread(target=arduino_worker, daemon=True).start()
 # --- KAMERA UND MAẞSTAB ---
 def init_camera():
     global camera
+    # Versuche Indizes 0, 1, 2 durchzugehen
     for idx in [0, 1, 2]:
         cap = cv2.VideoCapture(idx, cv2.CAP_V4L2)
         if cap.isOpened():
             cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'))
             cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1024)
-            camera = cap; return True
+            camera = cap
+            print(f"[Kamera] Init erfolgreich auf Index {idx}")
+            return True
+    print("[Kamera] Fehler: Keine Kamera gefunden.")
     return False
 
 init_camera()
@@ -88,43 +104,37 @@ def draw_scale_bar(image, cal_factor):
         x1 = x2 - px_len
         y = h - 60
         
-        # 1. LINIE: Schatten (schwarz, dicker) und Hauptlinie (weiß)
+        # Grafik-Operationen (Schatten + Linie)
         cv2.line(image, (x1, y), (x2, y), (0, 0, 0), 4)
         cv2.line(image, (x1, y), (x2, y), (255, 255, 255), 2)
-        
-        # 2. ABSCHLUSSSTRICHE (Vertikal)
         cv2.line(image, (x1, y-5), (x1, y+5), (255, 255, 255), 2)
         cv2.line(image, (x2, y-5), (x2, y+5), (255, 255, 255), 2)
         
-        # 3. TEXT: "1 mm" vorbereiten
         text = "1 mm"
         font = cv2.FONT_HERSHEY_SIMPLEX
         scale = 0.6
         thickness = 1
         
-        # Text-Zentrierung berechnen
         text_size = cv2.getTextSize(text, font, scale, thickness)[0]
         text_x = x1 + (px_len - text_size[0]) // 2
         
-        # 4. TEXT-SCHATTEN (Schwarz) für Lesbarkeit auf hellem Grund
         cv2.putText(image, text, (text_x + 1, y - 14), font, scale, (0, 0, 0), thickness + 1)
-        # 5. TEXT-HAUPTZEILE (Weiß)
         cv2.putText(image, text, (text_x, y - 15), font, scale, (255, 255, 255), thickness)
         
         return image
     except Exception as e:
-        # Im professionellen Betrieb nur Error-Logging, kein Crash
         return image
 
-
 # --- ROUTEN ---
+
 @app.route('/')
 def index():
-    with open(HTML_FILE, "r", encoding='utf-8') as f:
-        return render_template_string(f.read())
+    # NEU: Nutzt Flask-Standard und sucht im konfigurierten Template-Ordner
+    return render_template('index.html')
 
 @app.route('/get_env_data')
-def get_env_data(): return jsonify(state["arduino"])
+def get_env_data(): 
+    return jsonify(state["arduino"])
 
 @app.route('/video_feed')
 def video_feed():
@@ -134,7 +144,6 @@ def video_feed():
                 if not state["freeze"]:
                     success, frame = camera.read()
                     if success: 
-                        # Maßstab wird hier permanent in den Live-Stream gezeichnet
                         state["last_frame"] = draw_scale_bar(frame, state["cal_factor"])
                 
                 if state["last_frame"] is not None:
@@ -145,33 +154,62 @@ def video_feed():
 
 @app.route('/toggle_freeze', methods=['POST'])
 def toggle_freeze():
-    state["freeze"] = not state["freeze"]; return jsonify(status="ok")
+    state["freeze"] = not state["freeze"]
+    return jsonify(status="ok")
 
 @app.route('/set_cal', methods=['POST'])
 def set_cal():
-    state['cal_factor'] = float(request.json['cal']); return jsonify(success=True)
+    try:
+        state['cal_factor'] = float(request.json['cal'])
+        return jsonify(success=True)
+    except:
+        return jsonify(success=False)
 
-# BILDDATEI SPEICHERN: Inklusive permanentem Maßstab im gespeicherten Bild
+# --- BILD SPEICHERN (Mit Position, Licht, Pol) ---
 @app.route('/snapshot', methods=['POST'])
 def snapshot():
     if state["last_frame"] is not None:
         d = request.json
         ts = datetime.now().strftime("%y%m%d_%H%M%S")
+        
+        # FORMAT: Datum_Typ_ID_Position_Licht_Pol.jpg
         fname = f"{ts}_{d['type']}_{d['name']}_{d['pos']}_{d['light']}_{d['pol']}.jpg"
-        # Bild ist bereits mit Maßstab versehen durch den Video-Feed
-        cv2.imwrite(os.path.join(DATA_DIR, 'mikroskopbilder', fname), state["last_frame"])
+        
+        # Speichern im Snapshot-Ordner
+        save_path = os.path.join(SNAPSHOT_FOLDER, fname)
+        cv2.imwrite(save_path, state["last_frame"])
+        
+        print(f"[SNAPSHOT] Bild gespeichert: {fname}")
         return jsonify(filename=fname)
     return jsonify(error="no frame")
 
-# SPEKTRENDATEI SPEICHERN (Ohne Integration im Dateinamen)
+
+# --- SPEKTRUM SPEICHERN (Ohne Position, nur Modus) ---
 @app.route('/save_spectro', methods=['POST'])
 def save_spectro():
     d = request.json
     ts = datetime.now().strftime("%y%m%d_%H%M%S")
+    
+    # FORMAT: Datum_Typ_ID_Modus.csv (Unabhängig vom Bild)
     fname = f"{ts}_{d['type']}_{d['name']}_{d['mode']}.csv"
-    with open(os.path.join(DATA_DIR, 'spektren', fname), "w") as f:
+    
+    # Speichern im Archiv-Ordner
+    save_path = os.path.join(ARCHIVE_FOLDER, fname)
+    with open(save_path, "w") as f:
         f.write(f"Wavelength,Intensity\n# Metadata: {json.dumps(d)}")
+    
+    print(f"[SPEKTRUM] Datei archiviert: {fname}")
+    return jsonify(filename=fname)
+
+    # NEU: Nutzt den flexiblen Pfad aus der Config
+    save_path = os.path.join(ARCHIVE_FOLDER, fname)
+    
+    with open(save_path, "w") as f:
+        f.write(f"Wavelength,Intensity\n# Metadata: {json.dumps(d)}")
+    
+    print(f"[Speichern] Spektrum archiviert: {save_path}")
     return jsonify(filename=fname)
 
 if __name__ == '__main__':
+    # Host 0.0.0.0 macht den Server im ganzen Netzwerk verfügbar
     app.run(host='0.0.0.0', port=5000, threaded=True)
