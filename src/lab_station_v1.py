@@ -3,8 +3,15 @@ import os
 import time
 import json
 import threading
+import logging
 from datetime import datetime
 from flask import Flask, render_template, Response, request, jsonify
+
+# --- WERKZEUG LOGGING STUMMSCHALTEN ---
+# Verhindert, dass jeder GET-Request im Terminal angezeigt wird.
+# Nur wirkliche Fehler (ERROR) werden noch gemeldet.
+log = logging.getLogger('werkzeug')
+log.setLevel(logging.ERROR)
 
 # --- NEU: Konfiguration importieren ---
 # Das setzt voraus, dass config.py im selben Ordner liegt
@@ -79,11 +86,15 @@ def init_camera():
     for idx in [0, 1, 2]:
         cap = cv2.VideoCapture(idx, cv2.CAP_V4L2)
         if cap.isOpened():
+            # WICHTIG: MJPG setzen
             cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'))
+            
+            # WICHTIG: Exakt 1280x960 anfordern (laut deinem Log), NICHT 1024
             cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1024)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 960)
+            
             camera = cap
-            print(f"[Kamera] Init erfolgreich auf Index {idx}")
+            print(f"[Kamera] Init erfolgreich auf Index {idx} mit 1280x960 MJPG")
             return True
     print("[Kamera] Fehler: Keine Kamera gefunden.")
     return False
@@ -211,5 +222,11 @@ def save_spectro():
     return jsonify(filename=fname)
 
 if __name__ == '__main__':
+    # Dieser Print erzeugt den klickbaren Link, trotz stummem Logger
+    print("\n" + "="*40)
+    print(" SYSTEM BEREIT - LEISE MODUS")
+    print(" Dashboard öffnen: http://localhost:5000")
+    print("="*40 + "\n")
+    
     # Host 0.0.0.0 macht den Server im ganzen Netzwerk verfügbar
     app.run(host='0.0.0.0', port=5000, threaded=True)
