@@ -4,271 +4,186 @@
     <meta charset="UTF-8">
     <title>Hazion Embedded System</title>
     <style>
-        :root { --bg: #1a1a1a; --panel: #2d2d2d; --text: #e0e0e0; --accent: #007bff; }
-        body { background: var(--bg); color: var(--text); font-family: monospace; margin: 0; display: grid; grid-template-rows: 60px 1fr; height: 100vh; }
+        :root { --bg: #0f0f0f; --panel: #1e1e1e; --text: #d4d4d4; --accent: #0056b3; --success: #28a745; --danger: #dc3545; }
+        body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; display: grid; grid-template-rows: 50px 1fr; height: 100vh; overflow: hidden; }
         
-        /* Header */
-        header { background: var(--panel); display: flex; align-items: center; padding: 0 20px; border-bottom: 2px solid #444; justify-content: space-between; }
-        h1 { font-size: 1.5rem; margin: 0; }
+        /* Header & Status-LEDs */
+        header { background: var(--panel); display: flex; align-items: center; padding: 0 20px; border-bottom: 1px solid #333; justify-content: space-between; }
+        .led-group { display: flex; gap: 20px; }
+        .led-box { display: flex; align-items: center; gap: 8px; font-size: 0.75rem; text-transform: uppercase; }
+        .led { width: 12px; height: 12px; border-radius: 50%; background: #333; box-shadow: inset 0 0 4px #000; }
+        .led.green { background: #0f0; box-shadow: 0 0 10px #0f0; }
+        .led.red { background: #f00; box-shadow: 0 0 10px #f00; }
+        .led.blink { animation: blink 0.8s infinite; background: #f00; }
+        @keyframes blink { 50% { opacity: 0.2; } }
+
+        /* Layout */
+        main { display: grid; grid-template-columns: 320px 1fr; gap: 0; }
+        aside { background: var(--panel); border-right: 1px solid #333; padding: 15px; display: flex; flex-direction: column; gap: 15px; }
         
-        /* Status LEDs */
-       .led-group { display: flex; gap: 15px; }
-       .led { width: 15px; height: 15px; border-radius: 50%; background: #555; border: 1px solid #000; }
-       .led.green { background: #0f0; box-shadow: 0 0 10px #0f0; }
-       .led.red { background: #f00; box-shadow: 0 0 10px #f00; }
-       .led.blink { animation: blink 1s infinite; background: #f00; }
-        @keyframes blink { 50% { opacity: 0.3; } }
+        /* Viewport & Scale */
+        #viewport { position: relative; background: #000; display: flex; justify-content: center; align-items: center; overflow: hidden; }
+        #video_feed { max-width: 100%; max-height: 100%; object-fit: contain; }
+        #overlay_canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
 
-        /* Main Grid */
-        main { display: grid; grid-template-columns: 300px 1fr; gap: 2px; }
+        /* Controls & Formats */
+        .group-label { font-size: 0.7rem; color: #666; text-transform: uppercase; margin-bottom: 5px; font-weight: bold; border-bottom: 1px solid #333; padding-bottom: 3px; }
+        .control-block { background: #252525; padding: 10px; border-radius: 4px; margin-bottom: 10px; }
+        select, input { width: 100%; background: #333; border: 1px solid #444; color: #fff; padding: 6px; margin: 5px 0; font-size: 0.85rem; }
         
-        /* Sidebar */
-        aside { background: var(--panel); padding: 20px; display: flex; flex-direction: column; gap: 20px; }
-        
-        /* Viewport */
-        #viewport { position: relative; background: #000; overflow: hidden; display: flex; justify-content: center; align-items: center; }
-        #video_feed { max-width: 100%; max-height: 100%; }
-        #overlay_canvas { position: absolute; top: 0; left: 0; pointer-events: auto; }
+        .mode-btn-group { display: flex; gap: 5px; margin-bottom: 15px; }
+        .mode-btn { flex: 1; padding: 8px; background: #333; border: none; color: #888; cursor: pointer; font-size: 0.75rem; font-weight: bold; transition: 0.2s; }
+        .mode-btn.active { background: var(--accent); color: white; }
 
-        /* Controls */
-       .control-group { border: 1px solid #555; padding: 10px; border-radius: 4px; }
-       .control-group label { display: block; margin-bottom: 5px; font-size: 0.8rem; color: #aaa; }
-        select, input { width: 100%; background: #444; border: 1px solid #666; color: white; padding: 5px; margin-bottom: 10px; }
-        button { width: 100%; padding: 10px; background: var(--accent); border: none; color: white; cursor: pointer; font-weight: bold; }
-        button:disabled { background: #555; cursor: not-allowed; }
+        /* Sensor Display (Strict Formatting) */
+        .sensor-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .sensor-card { background: #1a1a1a; padding: 8px; border-radius: 3px; border: 1px solid #333; }
+        .sensor-label { font-size: 0.65rem; color: #777; }
+        .sensor-value { font-size: 1rem; font-family: 'Courier New', monospace; font-weight: bold; }
 
-        /* Mode Tabs */
-       .tabs { display: flex; gap: 5px; margin-bottom: 10px; }
-       .tab { flex: 1; padding: 5px; background: #444; border: none; color: white; cursor: pointer; font-size: 0.8rem; }
-       .tab.active { background: var(--accent); }
-
-        /* Sensor Grid */
-       .sensor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
-       .sensor-card { background: #333; padding: 5px; text-align: center; }
-       .sensor-val { font-size: 1.2rem; font-weight: bold; }
-       .sensor-unit { font-size: 0.7rem; color: #888; }
+        button#btn_save { width: 100%; padding: 12px; background: var(--success); color: white; border: none; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        button#btn_save:disabled { background: #444; cursor: not-allowed; }
     </style>
 </head>
 <body>
     <header>
-        <h1>HAZION EMBEDDED SYSTEM</h1>
+        <div style="font-weight: bold; letter-spacing: 1px;">HAZION EMBEDDED SYSTEM</div>
         <div class="led-group">
-            <div><div class="led" id="led_micro"></div><small>MIC</small></div>
-            <div><div class="led" id="led_spec"></div><small>SPEC</small></div>
-            <div><div class="led" id="led_clim"></div><small>CLIM</small></div>
+            <div class="led-box"><div class="led" id="led_micro"></div> Mikroskop </div>
+            <div class="led-box"><div class="led" id="led_spec"></div> Spektrum </div>
+            <div class="led-box"><div class="led" id="led_clim"></div> Klima </div>
         </div>
     </header>
-
     <main>
         <aside>
-            <div class="tabs">
-                <button class="tab active" onclick="setMode('micro')">Mikroskop</button>
-                <button class="tab" onclick="setMode('spec')">Spektrum</button>
-                <button class="tab" onclick="setMode('clim')">Klima</button>
+            <div class="group-label">Betriebsmodus</div>
+            <div class="mode-btn-group">
+                <button class="mode-btn active" onclick="setMode('micro', this)">Mikroskop-Modus</button>
+                <button class="mode-btn" onclick="setMode('spec', this)">Spektrum-Modus</button>
+                <button class="mode-btn" onclick="setMode('clim', this)">Klimadaten-Modus</button>
             </div>
 
-            <div class="control-group">
-                <label>Naming Scheme</label>
-                <select id="inp_typ"><option value="B">Bohrprobe (B)</option><option value="W">Wischprobe (W)</option><option value="M">Material (M)</option></select>
-                <input type="text" id="inp_id" placeholder="ID (z.B. P-01)" oninput="validateInput(this)">
-                <input type="text" id="inp_pos" placeholder="POS (z.B. L1)" oninput="validateInput(this)">
+            <div class="group-label">Naming Scheme (ML-Konform)</div>
+            <div class="control-block">
+                <select id="inp_typ">
+                    <option value="B">Bohrprobe (B)</option>
+                    <option value="W">Wischprobe (W)</option>
+                    <option value="M">Material (M)</option>
+                    <option value="R">Referenz (R)</option>
+                </select>
+                <input type="text" id="inp_id" placeholder="Projekt-ID" oninput="validate()">
+                <input type="text" id="inp_pos" placeholder="Position/Ort" oninput="validate()">
                 
-                <div id="micro_controls">
-                    <select id="inp_licht"><option value="R">Ring (R)</option><option value="C">Coax (C)</option></select>
-                    <select id="inp_pol"><option value="1">Pol: Ein</option><option value="0">Pol: Aus</option></select>
-                    <select id="inp_mag" onchange="updateScale()"><option value="Micro_4x">Obj. 4x</option><option value="Micro_10x">Obj. 10x</option></select>
+                <div id="micro_options">
+                    <select id="inp_licht">
+                        <option value="R">Ring (R)</option>
+                        <option value="C">Coax (C)</option>
+                        <option value="S">Side (S)</option>
+                        <option value="O">Off (O)</option>
+                    </select>
+                    <select id="inp_pol">
+                        <option value="On">Pol: Ein</option>
+                        <option value="Off">Pol: Aus</option>
+                    </select>
+                    <select id="inp_mag" onchange="updateScale()">
+                        <option value="Micro_4x">Objektiv 4x</option>
+                        <option value="Micro_10x">Objektiv 10x</option>
+                        <option value="Micro_40x">Objektiv 40x</option>
+                    </select>
                 </div>
-                
-                <div id="filename_preview" style="font-size: 0.7rem; color: #0f0; margin-top: 5px; word-break: break-all;"></div>
+                <div id="preview" style="font-size: 0.6rem; color: #555; margin-top: 5px;"></div>
                 <button id="btn_save" onclick="saveData()">DATENSATZ SPEICHERN</button>
             </div>
 
-            <div class="control-group">
-                <label>Umweltparameter</label>
-                <div class="sensor-grid">
-                    <div class="sensor-card"><div class="sensor-val" id="val_t1">--</div><div class="sensor-unit">T1 (°C)</div></div>
-                    <div class="sensor-card"><div class="sensor-val" id="val_rh1">--</div><div class="sensor-unit">RH1 (%)</div></div>
-                    <div class="sensor-card"><div class="sensor-val" id="val_t2">--</div><div class="sensor-unit">T2 (°C)</div></div>
-                    <div class="sensor-card"><div class="sensor-val" id="val_rh2">--</div><div class="sensor-unit">RH2 (%)</div></div>
+            <div class="group-label">Umweltparameter</div>
+            <div class="control-block">
+                <div class="sensor-row">
+                    <div class="sensor-card"><div class="sensor-label">T1 (°C)</div><div class="sensor-value" id="val_t1">T1:  --.-</div></div>
+                    <div class="sensor-card"><div class="sensor-label">RH1 (%)</div><div class="sensor-value" id="val_rh1">RH1:  --.-</div></div>
+                    <div class="sensor-card"><div class="sensor-label">T2 (°C)</div><div class="sensor-value" id="val_t2">T2:  --.-</div></div>
+                    <div class="sensor-card"><div class="sensor-label">RH2 (%)</div><div class="sensor-value" id="val_rh2">RH2:  --.-</div></div>
                 </div>
-                <div style="margin-top:5px; text-align: center;">
-                    Gas: <span id="val_gas" style="font-weight:bold;">--</span> ppm
+                <div class="sensor-card" style="margin-top:8px; text-align: center;">
+                    <div class="sensor-label">Gas (ppm)</div><div class="sensor-value" id="val_gas">GAS:  ---</div>
                 </div>
             </div>
         </aside>
-
+        
         <div id="viewport">
-            <img id="video_feed" src="/video_feed" alt="Video Feed">
+            <img id="video_feed" src="/video_feed">
             <canvas id="overlay_canvas"></canvas>
         </div>
     </main>
 
     <script>
-        // --- Globals ---
         let currentMode = 'micro';
-        const calibration = { "Micro_4x": 125.0, "Micro_10x": 312.5 }; // Pixel pro mm
-        let pxPerMm = 125.0;
+        const calibration = { "Micro_4x": 125.0, "Micro_10x": 312.5, "Micro_40x": 1250.0 };
         
-        // --- SSE Connection ---
         const evtSource = new EventSource("/stream");
-        evtSource.onmessage = function(e) {
+        evtSource.onmessage = (e) => {
             const data = JSON.parse(e.data);
-            
             if(data.type === 'climate_update') {
-                updateSensors(data.payload.values);
+                const v = data.payload.values;
+                // Präzisionsvorgabe: Zwei Leerzeichen nach Doppelpunkt
+                document.getElementById('val_t1').innerText = `T1:  ${v.t1.toFixed(1)}`;
+                document.getElementById('val_t2').innerText = `T2:  ${v.t2.toFixed(1)}`;
+                document.getElementById('val_rh1').innerText = `RH1:  ${v.rh1.toFixed(1)}`;
+                document.getElementById('val_rh2').innerText = `RH2:  ${v.rh2.toFixed(1)}`;
+                document.getElementById('val_gas').innerText = `GAS:  ${v.gas}`;
                 updateLeds(data.payload.leds);
-            }
-            if(data.type === 'led_update') {
-                updateLeds(data.payload);
             }
         };
 
-        function updateSensors(vals) {
-            document.getElementById('val_t1').innerText = vals.t1.toFixed(1);
-            document.getElementById('val_t2').innerText = vals.t2.toFixed(1);
-            document.getElementById('val_rh1').innerText = vals.rh1.toFixed(1);
-            document.getElementById('val_rh2').innerText = vals.rh2.toFixed(1);
-            const gasElem = document.getElementById('val_gas');
-            gasElem.innerText = vals.gas;
-            gasElem.style.color = vals.gas > 200? 'red' : 'inherit';
-        }
-
-        function updateLeds(leds) {
-            ['micro', 'spec', 'clim'].forEach(sys => {
-                const el = document.getElementById('led_' + sys);
-                el.className = 'led ' + leds[sys];
-            });
-        }
-
-        // --- Logic & Validation ---
-        function setMode(mode) {
+        function setMode(mode, btn) {
             currentMode = mode;
-            document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
-            event.target.classList.add('active');
-            
-            // Toggle Canvas visibility
-            const canvas = document.getElementById('overlay_canvas');
-            canvas.style.display = (mode === 'micro')? 'block' : 'none';
-            
-            updateFilenamePreview();
+            document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById('micro_options').style.display = (mode === 'micro') ? 'block' : 'none';
+            drawScale();
         }
 
-        function validateInput(el) {
+        function validate() {
             const regex = /^[a-zA-Z0-9_-]+$/;
-            if (!regex.test(el.value) && el.value!== "") {
-                el.style.borderColor = "red";
-                document.getElementById('btn_save').disabled = true;
-            } else {
-                el.style.borderColor = "#666";
-                document.getElementById('btn_save').disabled = false;
-            }
-            updateFilenamePreview();
+            const idValid = regex.test(document.getElementById('inp_id').value);
+            const posValid = regex.test(document.getElementById('inp_pos').value);
+            document.getElementById('btn_save').disabled = !(idValid && posValid);
         }
 
-        function updateFilenamePreview() {
-            // Generiert Vorschau nach Schema: YYYYMMDD_HHMMSS_TYP_ID_POS_Licht_Pol_EXT
-            // Hier vereinfacht für die Anzeige
-            const typ = document.getElementById('inp_typ').value;
-            const id = document.getElementById('inp_id').value |
-
-| "ID";
-            const pos = document.getElementById('inp_pos').value |
-
-| "POS";
-            document.getElementById('filename_preview').innerText = `DATE_TIME_${typ}_${id}_${pos}_...`;
-        }
-
-        function saveData() {
-            // Sendet POST an Backend
-            const payload = {
-                typ: document.getElementById('inp_typ').value,
-                id: document.getElementById('inp_id').value,
-                pos: document.getElementById('inp_pos').value,
-                licht: document.getElementById('inp_licht').value,
-                pol: document.getElementById('inp_pol').value
-            };
-            fetch('/api/save_image', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(payload)
-            }).then(r => r.json()).then(d => {
-                if(d.status === 'success') alert("Gespeichert: " + d.file);
-            });
-        }
-
-        // --- Canvas Auto-Cal Ruler ---
+        /* --- Metrologie: 1mm Maßstab fixiert unten rechts --- */
         const canvas = document.getElementById('overlay_canvas');
         const ctx = canvas.getContext('2d');
         const video = document.getElementById('video_feed');
-        
-        let rulerX = 50, rulerY = 50;
-        let isDragging = false;
 
-        function resizeCanvas() {
+        function drawScale() {
             canvas.width = video.clientWidth;
             canvas.height = video.clientHeight;
-            drawRuler();
-        }
-        window.addEventListener('resize', resizeCanvas);
-        video.onload = resizeCanvas; // Init wenn Video geladen
+            if(currentMode !== 'micro') return;
 
-        function updateScale() {
             const mag = document.getElementById('inp_mag').value;
-            pxPerMm = calibration[mag];
-            drawRuler();
-        }
+            const pxPerMm = calibration[mag];
+            const scaleFactor = canvas.width / 960.0; // Basierend auf Stream-Resolution
+            const len = pxPerMm * scaleFactor;
 
-        function drawRuler() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            // Fixiert unten rechts
+            const x = canvas.width - len - 40;
+            const y = canvas.height - 40;
+
             ctx.strokeStyle = "#0f0";
-            ctx.lineWidth = 3;
-            ctx.font = "16px monospace";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(x, y); ctx.lineTo(x + len, y);
+            ctx.moveTo(x, y-5); ctx.lineTo(x, y+5);
+            ctx.moveTo(x+len, y-5); ctx.lineTo(x+len, y+5);
+            ctx.stroke();
+
             ctx.fillStyle = "#0f0";
-
-            // Skalierungsfaktor berechnen (Video intrinsic vs displayed)
-            // Annahme: Video Stream ist 960px breit (aus pipeline)
-            const displayedWidth = canvas.width;
-            const scaleFactor = displayedWidth / 960.0; 
-            const rulerLengthPx = pxPerMm * scaleFactor;
-
-            ctx.beginPath();
-            ctx.moveTo(rulerX, rulerY);
-            ctx.lineTo(rulerX + rulerLengthPx, rulerY);
-            ctx.stroke();
-            
-            // Ticks
-            ctx.beginPath();
-            ctx.moveTo(rulerX, rulerY - 5);
-            ctx.lineTo(rulerX, rulerY + 5);
-            ctx.moveTo(rulerX + rulerLengthPx, rulerY - 5);
-            ctx.lineTo(rulerX + rulerLengthPx, rulerY + 5);
-            ctx.stroke();
-
-            ctx.fillText("1mm", rulerX + (rulerLengthPx/2) - 15, rulerY - 10);
+            ctx.font = "bold 14px monospace";
+            ctx.textAlign = "center";
+            ctx.fillText("1mm", x + (len/2), y - 10); // Zentriert über der Linie
         }
-
-        // Drag Logic
-        canvas.addEventListener('mousedown', e => {
-            const rect = canvas.getBoundingClientRect();
-            const mx = e.clientX - rect.left;
-            const my = e.clientY - rect.top;
-            // Einfache Hitbox um den Startpunkt
-            if (Math.abs(mx - rulerX) < 50 && Math.abs(my - rulerY) < 50) {
-                isDragging = true;
-            }
-        });
-        canvas.addEventListener('mousemove', e => {
-            if (isDragging) {
-                const rect = canvas.getBoundingClientRect();
-                rulerX = e.clientX - rect.left;
-                rulerY = e.clientY - rect.top;
-                requestAnimationFrame(drawRuler);
-            }
-        });
-        canvas.addEventListener('mouseup', () => isDragging = false);
-
-        // Init
-        setInterval(drawRuler, 1000); // Fail-safe Redraw
+        
+        window.addEventListener('resize', drawScale);
+        setInterval(drawScale, 500);
     </script>
 </body>
 </html>
