@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lab_station_v2 | Dashboard</title>
+    <style>
+        :root { --bg: #121212; --panel: #1e1e1e; --accent: #00e5ff; --text: #e0e0e0; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; height: 100vh; overflow: hidden; }
+        
+        /* Sidebar Styling */
+       .sidebar { width: 300px; background: var(--panel); border-right: 1px solid #333; padding: 20px; display: flex; flex-direction: column; }
+       .mode-btn { background: #333; border: 1px solid #444; color: white; padding: 12px; margin-bottom: 10px; cursor: pointer; text-align: left; border-radius: 4px; transition: 0.3s; }
+       .mode-btn:hover { background: #444; border-color: var(--accent); }
+       .mode-btn.active { background: var(--accent); color: #000; font-weight: bold; }
+        
+        /* Main Viewport */
+       .main-view { flex-grow: 1; padding: 20px; display: flex; flex-direction: column; justify-content: center; align-items: center; position: relative; }
+       .display-container { width: 100%; max-width: 1280px; aspect-ratio: 16/9; background: #000; border: 2px solid #333; display: flex; justify-content: center; align-items: center; overflow: hidden; }
+        
+        /* Responsive Content */
+        #video-feed, #spectrum-plot { width: 100%; height: 100%; object-fit: contain; }
+       .hidden { display: none!important; }
+        
+        /* Sensor Display (Strikt 2 Leerzeichen) */
+       .sensor-box { margin-top: auto; padding: 15px; background: #252525; border-radius: 8px; border-left: 4px solid var(--accent); }
+       .sensor-value { font-family: 'Courier New', Courier, monospace; font-size: 1.2em; margin-bottom: 5px; }
+       .status-dot { height: 10px; width: 10px; background-color: #00ff00; border-radius: 50%; display: inline-block; margin-right: 8px; }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h2>Lab_station_v2</h2>
+        <p style="font-size: 0.8em; color: #888;">Jetson Orin Nano Super 8GB</p>
+        <hr style="width: 100%; border: 0; border-top: 1px solid #333; margin: 20px 0;">
+        
+        <button class="mode-btn active" onclick="switchMode('microscope', this)">🔬 Mikroskop-Modus</button>
+        <button class="mode-btn" onclick="switchMode('spectrum', this)">📊 UV-VIS Spektrum</button>
+        <button class="mode-btn" onclick="switchMode('climate', this)">🌡️ Umwelt-Daten</button>
+        
+        <div id="params-microscope" class="param-panel">
+            <p><small>Maßstab: 1mm (Auto-Cal)</small></p>
+        </div>
+
+        <div class="sensor-box">
+            <div class="sensor-value" id="ui-temp">Temperatur:  --.-°C</div>
+            <div class="sensor-value" id="ui-hum">Feuchtigkeit:  --.-%</div>
+            <p style="margin-top:15px; font-size: 0.7em;"><span class="status-dot"></span>System: Online</p>
+        </div>
+    </div>
+
+    <div class="main-view">
+        <div class="display-container">
+            <img id="video-feed" src="/video_feed" alt="Live Video">
+            
+            <img id="spectrum-plot" class="hidden" src="" alt="Spektrum Plot">
+            
+            <div id="climate-view" class="hidden" style="text-align: center;">
+                <h3>Kontinuierliche Aufzeichnung</h3>
+                <p>Log-Pfad: /data/klimadaten/</p>
+                <div id="climate-details"></div>
+            </div>
+        </div>
+        <p id="file-info" style="margin-top: 10px; color: #888; font-size: 0.9em;">Aktuelle Datei: --</p>
+    </div>
+
+    <script>
+        let currentMode = 'microscope';
+
+        function switchMode(mode, btn) {
+            currentMode = mode;
+            // UI Toggle für Buttons
+            document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            // View Toggle
+            document.getElementById('video-feed').classList.add('hidden');
+            document.getElementById('spectrum-plot').classList.add('hidden');
+            document.getElementById('climate-view').classList.add('hidden');
+
+            if (mode === 'microscope') document.getElementById('video-feed').classList.remove('hidden');
+            else if (mode === 'spectrum') document.getElementById('spectrum-plot').classList.remove('hidden');
+            else if (mode === 'climate') document.getElementById('climate-view').classList.remove('hidden');
+        }
+
+        async function pollData() {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+
+                // 1. Sensoren aktualisieren (Striktes Format wird vom Backend geliefert)
+                document.getElementById('ui-temp').innerText = data.temp_display;
+                document.getElementById('ui-hum').innerText = data.hum_display;
+
+                // 2. Spektrum aktualisieren (Base64 Injection)
+                if (data.last_spectrum_img) {
+                    const specImg = document.getElementById('spectrum-plot');
+                    specImg.src = "data:image/png;base64," + data.last_spectrum_img;
+                    document.getElementById('file-info').innerText = "Spektrum: " + data.last_spectrum_name;
+                }
+            } catch (e) {
+                console.error("Polling-Fehler:", e);
+            }
+        }
+
+        // Intervall: 2 Sekunden wie in AP 5 gefordert
+        setInterval(pollData, 2000);
+    </script>
+</body>
+</html>
