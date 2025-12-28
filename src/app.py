@@ -60,23 +60,60 @@ def video_feed():
                 time.sleep(0.1)
     return Response(gen(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
-@app.route('/api/save_image', methods=['POST'])
-def save_image():
-    data = request.json
-    # Naming Scheme Validierung
-    name_parts = [data.get(k) for k in ['typ', 'id', 'pos', 'licht', 'pol']]
-    
-    # Prüfe auf illegale Zeichen in ID und POS
-    if not re.match(VALID_NAME_REGEX, data['id']) or not re.match(VALID_NAME_REGEX, data['pos']):
-        return jsonify({"status": "error", "msg": "Invalid Characters"}), 400
+from werkzeug.utils import secure_filename
 
-    timestamp = time.strftime("%Y%m%d_%H%M%S")
-    filename = f"{timestamp}_{'_'.join(name_parts)}.jpg"
-    filepath = os.path.join(DIRS, filename)
+@app.route('/api/save_data', methods=['POST'])
+def save_data():
+    data = request.json
+    mode = data.get('mode')  # 'micro', 'spec' oder 'clim'
     
-    if cam.take_snapshot(filepath):
+    # Basis-Validierung der ML-relevanten Felder 
+    for key in ['id', 'pos']:
+        val = data.get(key, "")
+        if not re.match(VALID_NAME_REGEX, val):
+            return jsonify({"status": "error", "msg": f"Ungültige Zeichen in {key}"}), 400
+
+    # Zeitstempel generieren
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    typ = data.get('typ', 'R') # B, W, M, R [cite: 371]
+    id_val = secure_filename(data.get('id'))
+    pos_val = secure_filename(data.get('pos'))
+
+    # --- 1. Mikroskopie Modus --- [cite: 369]
+    if mode == 'micro':
+        licht = data.get('licht', 'O') # R, C, S, O [cite: 374]
+        pol = data.get('pol', 'Off')   # On, Off [cite: 375]
+        # Schema: YYYYMMDD_HHMMSS_TYP_ID_POS_Licht_Pol_EXT
+        filename = f"{timestamp}_{typ}_{id_val}_{pos_val}_{licht}_{pol}.jpg"
+        filepath = os.path.join(DIRS['SNAPSHOTS'], filename)
+        
+        if cam.take_snapshot(filepath):
+            return jsonify({"status": "success", "file": filename})
+
+    # --- 2. Spektrum Modus --- 
+    elif mode == 'spec':
+        # Schema: YYYYMMDD_HHMMSS_TYP_ID_POS_Modus_EXT
+        filename = f"{timestamp}_{typ}_{id_val}_{pos_val}_Spec.csv"
+        filepath = os.path.join(DIRS['SPECTRA'], filename)
+        
+        # Logik zum Verschieben/Speichern der Spektrumsdatei hier einfügen
         return jsonify({"status": "success", "file": filename})
-    return jsonify({"status": "error"}), 500
+
+    # --- 3. Klimadaten Modus --- 
+    elif mode == 'clim':
+        # Schema: LOG-Zeitraum_Bezeichnung_Ortsangabe_ID_EXT
+        # Wir nutzen TYP als Bezeichnung und POS als Ortsangabe
+        filename = f"LOG-{timestamp}_{typ}_{pos_val}_{id_val}.csv"
+        filepath = os.path.join(DIRS['CLIMATE'], filename)
+        
+        v = dm.current_values # Aktuelle Sensordaten aus DataManager
+        with open(filepath, 'w') as f:
+            f.write("Timestamp,T1,T2,RH1,RH2,Gas\n")
+            f.write(f"{timestamp},{v['t1']},{v['t2']},{v['rh1']},{v['rh2']},{v['gas']}\n")
+        
+        return jsonify({"status": "success", "file": filename})
+
+    return jsonify({"status": "error", "msg": "Unbekannter Modus"}), 500
 
 if __name__ == '__main__':
     # WICHTIG: threaded=True für SSE
