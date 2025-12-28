@@ -1,55 +1,66 @@
 import cv2
-import logging
-import gc
-# Import der Metrologie-Konstanten
-from config import CAL_FACTOR
+import subprocess
+import time
+from config import DIRS
 
 class CameraEngine:
-    def __init__(self, device_id=0):
-        # Hardware-beschleunigte Pipeline für USB-Kameras auf dem Jetson [13, 14]
-        # 1. v4l2src: Greift auf die USB-Kamera zu.
-        # 2. nvv4l2decoder: Nutzt die Jetson-Hardware zum Dekodieren von MJPEG.
-        # 3. nvvidconv: Konvertiert das Format auf der iGPU in BGRx (OpenCV kompatibel). [12]
-        self.pipeline = (
-            f"v4l2src device=/dev/video{device_id}! "
-            f"image/jpeg,width=1280,height=720,framerate=30/1! "
-            f"nvv4l2decoder mjpeg=1! "
-            f"nvvidconv! "
-            f"video/x-raw,format=BGRx! "
-            f"videoconvert! "
-            f"video/x-raw,format=BGR! "
-            f"appsink drop=1 sync=false"
+    def __init__(self):
+        self.cap = None
+        self.is_recording = False
+        self.pipeline_process = None
+
+    def get_gstreamer_pipeline(self):
+        # Orin Nano Pipeline: 
+        # ISP -> NVMM -> Resize -> CPU Memory -> Appsink
+        return (
+            "nvarguscamerasrc! "
+            "video/x-raw(memory:NVMM), width=(int)1920, height=(int)1080, format=(string)NV12, framerate=(fraction)30/1! "
+            "nvvidconv! "
+            "video/x-raw, width=(int)960, height=(int)540, format=(string)BGRx! "
+            "videoconvert! "
+            "video/x-raw, format=(string)BGR! "
+            "appsink"
         )
-        self.cap = cv2.VideoCapture(self.pipeline, cv2.CAP_GSTREAMER)
+
+    def start_stream(self):
+        if self.cap is None:
+            self.cap = cv2.VideoCapture(self.get_gstreamer_pipeline(), cv2.CAP_GSTREAMER)
 
     def get_frame(self):
-        success, frame = self.cap.read()
-        if not success:
-            return None
-        
-        # --- AP 4: 1mm-Maßstab Einblendung ---
-        # Berechnung der Linienlänge basierend auf dem Kalibrierungsfaktor.
-        line_length_px = int(1000 / CAL_FACTOR)
-        h, w = frame.shape[:2]
-        
-        # Position: Unten rechts (Offset 50px vom Rand)
-        pt1 = (w - 50 - line_length_px, h - 50)
-        pt2 = (w - 50, h - 50)
-        
-        # Linie zeichnen
-        cv2.line(frame, pt1, pt2, (0, 255, 0), 2)
-        
-        # Text zentriert über der Linie
-        text = "1mm"
-        font = cv2.FONT_HERSHEY_SIMPLEX
-        text_size = cv2.getTextSize(text, font, 0.5, 1)
-        text_x = pt1 + (line_length_px // 2) - (text_size // 2)
-        cv2.putText(frame, text, (text_x, pt1[1] - 10), font, 0.5, (0, 255, 0), 1)
-        
-        return frame
+        if self.cap and self.cap.isOpened():
+            ret, frame = self.cap.read()
+            if ret:
+                # Encode als JPEG für Web-Stream (Software Encoding, aber kleine Auflösung ok)
+                ret, buffer = cv2.imencode('.jpg', frame)
+                return buffer.tobytes()
+        return None
 
-    def __del__(self):
-        # Ressourcen sauber freigeben und Speicher bereinigen [15, 16]
-        if self.cap.isOpened():
-            self.cap.release()
-        gc.collect()
+    def take_snapshot(self, filepath):
+        if self.cap and self.cap.isOpened():
+            ret, frame = self.cap.read()
+            if ret:
+                # Speichern in voller Auflösung (hier skaliert durch Pipeline, 
+                # für Full-Res müsste man eine separate Pipeline starten oder Snapshot-Mode nutzen)
+                cv2.imwrite(filepath, frame)
+                return True
+        return False
+
+    def start_recording(self, filename):
+        """Startet separate GStreamer-Instanz für Recording (High Res)"""
+        path = f"{DIRS}/{filename}.mp4"
+        # CPU Encoding mit ultrafast Preset für Orin Nano
+        cmd = (
+            f"gst-launch-1.0 -e nvarguscamerasrc! "
+            f"video/x-raw(memory:NVMM), width=1920, height=1080, framerate=30/1! "
+            f"nvvidconv! video/x-raw, format=I420! "
+            f"x264enc speed-preset=ultrafast bitrate=8000! "
+            f"mp4mux! filesink location={path}"
+        )
+        self.pipeline_process = subprocess.Popen(cmd.split())
+        self.is_recording = True
+
+    def stop_recording(self):
+        if self.pipeline_process:
+            self.pipeline_process.send_signal(subprocess.signal.SIGINT) # Sende EOS
+            self.pipeline_process = None
+            self.is_recording = False

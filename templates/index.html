@@ -2,109 +2,273 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lab_station_v2 | Dashboard</title>
+    <title>Hazion Embedded System</title>
     <style>
-        :root { --bg: #121212; --panel: #1e1e1e; --accent: #00e5ff; --text: #e0e0e0; }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; height: 100vh; overflow: hidden; }
+        :root { --bg: #1a1a1a; --panel: #2d2d2d; --text: #e0e0e0; --accent: #007bff; }
+        body { background: var(--bg); color: var(--text); font-family: monospace; margin: 0; display: grid; grid-template-rows: 60px 1fr; height: 100vh; }
         
-        /* Sidebar Styling */
-       .sidebar { width: 300px; background: var(--panel); border-right: 1px solid #333; padding: 20px; display: flex; flex-direction: column; }
-       .mode-btn { background: #333; border: 1px solid #444; color: white; padding: 12px; margin-bottom: 10px; cursor: pointer; text-align: left; border-radius: 4px; transition: 0.3s; }
-       .mode-btn:hover { background: #444; border-color: var(--accent); }
-       .mode-btn.active { background: var(--accent); color: #000; font-weight: bold; }
+        /* Header */
+        header { background: var(--panel); display: flex; align-items: center; padding: 0 20px; border-bottom: 2px solid #444; justify-content: space-between; }
+        h1 { font-size: 1.5rem; margin: 0; }
         
-        /* Main Viewport */
-       .main-view { flex-grow: 1; padding: 20px; display: flex; flex-direction: column; justify-content: center; align-items: center; position: relative; }
-       .display-container { width: 100%; max-width: 1280px; aspect-ratio: 16/9; background: #000; border: 2px solid #333; display: flex; justify-content: center; align-items: center; overflow: hidden; }
+        /* Status LEDs */
+       .led-group { display: flex; gap: 15px; }
+       .led { width: 15px; height: 15px; border-radius: 50%; background: #555; border: 1px solid #000; }
+       .led.green { background: #0f0; box-shadow: 0 0 10px #0f0; }
+       .led.red { background: #f00; box-shadow: 0 0 10px #f00; }
+       .led.blink { animation: blink 1s infinite; background: #f00; }
+        @keyframes blink { 50% { opacity: 0.3; } }
+
+        /* Main Grid */
+        main { display: grid; grid-template-columns: 300px 1fr; gap: 2px; }
         
-        /* Responsive Content */
-        #video-feed, #spectrum-plot { width: 100%; height: 100%; object-fit: contain; }
-       .hidden { display: none!important; }
+        /* Sidebar */
+        aside { background: var(--panel); padding: 20px; display: flex; flex-direction: column; gap: 20px; }
         
-        /* Sensor Display (Strikt 2 Leerzeichen) */
-       .sensor-box { margin-top: auto; padding: 15px; background: #252525; border-radius: 8px; border-left: 4px solid var(--accent); }
-       .sensor-value { font-family: 'Courier New', Courier, monospace; font-size: 1.2em; margin-bottom: 5px; }
-       .status-dot { height: 10px; width: 10px; background-color: #00ff00; border-radius: 50%; display: inline-block; margin-right: 8px; }
+        /* Viewport */
+        #viewport { position: relative; background: #000; overflow: hidden; display: flex; justify-content: center; align-items: center; }
+        #video_feed { max-width: 100%; max-height: 100%; }
+        #overlay_canvas { position: absolute; top: 0; left: 0; pointer-events: auto; }
+
+        /* Controls */
+       .control-group { border: 1px solid #555; padding: 10px; border-radius: 4px; }
+       .control-group label { display: block; margin-bottom: 5px; font-size: 0.8rem; color: #aaa; }
+        select, input { width: 100%; background: #444; border: 1px solid #666; color: white; padding: 5px; margin-bottom: 10px; }
+        button { width: 100%; padding: 10px; background: var(--accent); border: none; color: white; cursor: pointer; font-weight: bold; }
+        button:disabled { background: #555; cursor: not-allowed; }
+
+        /* Mode Tabs */
+       .tabs { display: flex; gap: 5px; margin-bottom: 10px; }
+       .tab { flex: 1; padding: 5px; background: #444; border: none; color: white; cursor: pointer; font-size: 0.8rem; }
+       .tab.active { background: var(--accent); }
+
+        /* Sensor Grid */
+       .sensor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+       .sensor-card { background: #333; padding: 5px; text-align: center; }
+       .sensor-val { font-size: 1.2rem; font-weight: bold; }
+       .sensor-unit { font-size: 0.7rem; color: #888; }
     </style>
 </head>
 <body>
-    <div class="sidebar">
-        <h2>Lab_station_v2</h2>
-        <p style="font-size: 0.8em; color: #888;">Jetson Orin Nano Super 8GB</p>
-        <hr style="width: 100%; border: 0; border-top: 1px solid #333; margin: 20px 0;">
-        
-        <button class="mode-btn active" onclick="switchMode('microscope', this)">🔬 Mikroskop-Modus</button>
-        <button class="mode-btn" onclick="switchMode('spectrum', this)">📊 UV-VIS Spektrum</button>
-        <button class="mode-btn" onclick="switchMode('climate', this)">🌡️ Umwelt-Daten</button>
-        
-        <div id="params-microscope" class="param-panel">
-            <p><small>Maßstab: 1mm (Auto-Cal)</small></p>
+    <header>
+        <h1>HAZION EMBEDDED SYSTEM</h1>
+        <div class="led-group">
+            <div><div class="led" id="led_micro"></div><small>MIC</small></div>
+            <div><div class="led" id="led_spec"></div><small>SPEC</small></div>
+            <div><div class="led" id="led_clim"></div><small>CLIM</small></div>
         </div>
+    </header>
 
-        <div class="sensor-box">
-            <div class="sensor-value" id="ui-temp">Temperatur:  --.-°C</div>
-            <div class="sensor-value" id="ui-hum">Feuchtigkeit:  --.-%</div>
-            <p style="margin-top:15px; font-size: 0.7em;"><span class="status-dot"></span>System: Online</p>
-        </div>
-    </div>
-
-    <div class="main-view">
-        <div class="display-container">
-            <img id="video-feed" src="/video_feed" alt="Live Video">
-            
-            <img id="spectrum-plot" class="hidden" src="" alt="Spektrum Plot">
-            
-            <div id="climate-view" class="hidden" style="text-align: center;">
-                <h3>Kontinuierliche Aufzeichnung</h3>
-                <p>Log-Pfad: /data/klimadaten/</p>
-                <div id="climate-details"></div>
+    <main>
+        <aside>
+            <div class="tabs">
+                <button class="tab active" onclick="setMode('micro')">Mikroskop</button>
+                <button class="tab" onclick="setMode('spec')">Spektrum</button>
+                <button class="tab" onclick="setMode('clim')">Klima</button>
             </div>
+
+            <div class="control-group">
+                <label>Naming Scheme</label>
+                <select id="inp_typ"><option value="B">Bohrprobe (B)</option><option value="W">Wischprobe (W)</option><option value="M">Material (M)</option></select>
+                <input type="text" id="inp_id" placeholder="ID (z.B. P-01)" oninput="validateInput(this)">
+                <input type="text" id="inp_pos" placeholder="POS (z.B. L1)" oninput="validateInput(this)">
+                
+                <div id="micro_controls">
+                    <select id="inp_licht"><option value="R">Ring (R)</option><option value="C">Coax (C)</option></select>
+                    <select id="inp_pol"><option value="1">Pol: Ein</option><option value="0">Pol: Aus</option></select>
+                    <select id="inp_mag" onchange="updateScale()"><option value="Micro_4x">Obj. 4x</option><option value="Micro_10x">Obj. 10x</option></select>
+                </div>
+                
+                <div id="filename_preview" style="font-size: 0.7rem; color: #0f0; margin-top: 5px; word-break: break-all;"></div>
+                <button id="btn_save" onclick="saveData()">DATENSATZ SPEICHERN</button>
+            </div>
+
+            <div class="control-group">
+                <label>Umweltparameter</label>
+                <div class="sensor-grid">
+                    <div class="sensor-card"><div class="sensor-val" id="val_t1">--</div><div class="sensor-unit">T1 (°C)</div></div>
+                    <div class="sensor-card"><div class="sensor-val" id="val_rh1">--</div><div class="sensor-unit">RH1 (%)</div></div>
+                    <div class="sensor-card"><div class="sensor-val" id="val_t2">--</div><div class="sensor-unit">T2 (°C)</div></div>
+                    <div class="sensor-card"><div class="sensor-val" id="val_rh2">--</div><div class="sensor-unit">RH2 (%)</div></div>
+                </div>
+                <div style="margin-top:5px; text-align: center;">
+                    Gas: <span id="val_gas" style="font-weight:bold;">--</span> ppm
+                </div>
+            </div>
+        </aside>
+
+        <div id="viewport">
+            <img id="video_feed" src="/video_feed" alt="Video Feed">
+            <canvas id="overlay_canvas"></canvas>
         </div>
-        <p id="file-info" style="margin-top: 10px; color: #888; font-size: 0.9em;">Aktuelle Datei: --</p>
-    </div>
+    </main>
 
     <script>
-        let currentMode = 'microscope';
-
-        function switchMode(mode, btn) {
-            currentMode = mode;
-            // UI Toggle für Buttons
-            document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-
-            // View Toggle
-            document.getElementById('video-feed').classList.add('hidden');
-            document.getElementById('spectrum-plot').classList.add('hidden');
-            document.getElementById('climate-view').classList.add('hidden');
-
-            if (mode === 'microscope') document.getElementById('video-feed').classList.remove('hidden');
-            else if (mode === 'spectrum') document.getElementById('spectrum-plot').classList.remove('hidden');
-            else if (mode === 'climate') document.getElementById('climate-view').classList.remove('hidden');
-        }
-
-        async function pollData() {
-            try {
-                const response = await fetch('/api/status');
-                const data = await response.json();
-
-                // 1. Sensoren aktualisieren (Striktes Format wird vom Backend geliefert)
-                document.getElementById('ui-temp').innerText = data.temp_display;
-                document.getElementById('ui-hum').innerText = data.hum_display;
-
-                // 2. Spektrum aktualisieren (Base64 Injection)
-                if (data.last_spectrum_img) {
-                    const specImg = document.getElementById('spectrum-plot');
-                    specImg.src = "data:image/png;base64," + data.last_spectrum_img;
-                    document.getElementById('file-info').innerText = "Spektrum: " + data.last_spectrum_name;
-                }
-            } catch (e) {
-                console.error("Polling-Fehler:", e);
+        // --- Globals ---
+        let currentMode = 'micro';
+        const calibration = { "Micro_4x": 125.0, "Micro_10x": 312.5 }; // Pixel pro mm
+        let pxPerMm = 125.0;
+        
+        // --- SSE Connection ---
+        const evtSource = new EventSource("/stream");
+        evtSource.onmessage = function(e) {
+            const data = JSON.parse(e.data);
+            
+            if(data.type === 'climate_update') {
+                updateSensors(data.payload.values);
+                updateLeds(data.payload.leds);
             }
+            if(data.type === 'led_update') {
+                updateLeds(data.payload);
+            }
+        };
+
+        function updateSensors(vals) {
+            document.getElementById('val_t1').innerText = vals.t1.toFixed(1);
+            document.getElementById('val_t2').innerText = vals.t2.toFixed(1);
+            document.getElementById('val_rh1').innerText = vals.rh1.toFixed(1);
+            document.getElementById('val_rh2').innerText = vals.rh2.toFixed(1);
+            const gasElem = document.getElementById('val_gas');
+            gasElem.innerText = vals.gas;
+            gasElem.style.color = vals.gas > 200? 'red' : 'inherit';
         }
 
-        // Intervall: 2 Sekunden wie in AP 5 gefordert
-        setInterval(pollData, 2000);
+        function updateLeds(leds) {
+            ['micro', 'spec', 'clim'].forEach(sys => {
+                const el = document.getElementById('led_' + sys);
+                el.className = 'led ' + leds[sys];
+            });
+        }
+
+        // --- Logic & Validation ---
+        function setMode(mode) {
+            currentMode = mode;
+            document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            // Toggle Canvas visibility
+            const canvas = document.getElementById('overlay_canvas');
+            canvas.style.display = (mode === 'micro')? 'block' : 'none';
+            
+            updateFilenamePreview();
+        }
+
+        function validateInput(el) {
+            const regex = /^[a-zA-Z0-9_-]+$/;
+            if (!regex.test(el.value) && el.value!== "") {
+                el.style.borderColor = "red";
+                document.getElementById('btn_save').disabled = true;
+            } else {
+                el.style.borderColor = "#666";
+                document.getElementById('btn_save').disabled = false;
+            }
+            updateFilenamePreview();
+        }
+
+        function updateFilenamePreview() {
+            // Generiert Vorschau nach Schema: YYYYMMDD_HHMMSS_TYP_ID_POS_Licht_Pol_EXT
+            // Hier vereinfacht für die Anzeige
+            const typ = document.getElementById('inp_typ').value;
+            const id = document.getElementById('inp_id').value |
+
+| "ID";
+            const pos = document.getElementById('inp_pos').value |
+
+| "POS";
+            document.getElementById('filename_preview').innerText = `DATE_TIME_${typ}_${id}_${pos}_...`;
+        }
+
+        function saveData() {
+            // Sendet POST an Backend
+            const payload = {
+                typ: document.getElementById('inp_typ').value,
+                id: document.getElementById('inp_id').value,
+                pos: document.getElementById('inp_pos').value,
+                licht: document.getElementById('inp_licht').value,
+                pol: document.getElementById('inp_pol').value
+            };
+            fetch('/api/save_image', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            }).then(r => r.json()).then(d => {
+                if(d.status === 'success') alert("Gespeichert: " + d.file);
+            });
+        }
+
+        // --- Canvas Auto-Cal Ruler ---
+        const canvas = document.getElementById('overlay_canvas');
+        const ctx = canvas.getContext('2d');
+        const video = document.getElementById('video_feed');
+        
+        let rulerX = 50, rulerY = 50;
+        let isDragging = false;
+
+        function resizeCanvas() {
+            canvas.width = video.clientWidth;
+            canvas.height = video.clientHeight;
+            drawRuler();
+        }
+        window.addEventListener('resize', resizeCanvas);
+        video.onload = resizeCanvas; // Init wenn Video geladen
+
+        function updateScale() {
+            const mag = document.getElementById('inp_mag').value;
+            pxPerMm = calibration[mag];
+            drawRuler();
+        }
+
+        function drawRuler() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.strokeStyle = "#0f0";
+            ctx.lineWidth = 3;
+            ctx.font = "16px monospace";
+            ctx.fillStyle = "#0f0";
+
+            // Skalierungsfaktor berechnen (Video intrinsic vs displayed)
+            // Annahme: Video Stream ist 960px breit (aus pipeline)
+            const displayedWidth = canvas.width;
+            const scaleFactor = displayedWidth / 960.0; 
+            const rulerLengthPx = pxPerMm * scaleFactor;
+
+            ctx.beginPath();
+            ctx.moveTo(rulerX, rulerY);
+            ctx.lineTo(rulerX + rulerLengthPx, rulerY);
+            ctx.stroke();
+            
+            // Ticks
+            ctx.beginPath();
+            ctx.moveTo(rulerX, rulerY - 5);
+            ctx.lineTo(rulerX, rulerY + 5);
+            ctx.moveTo(rulerX + rulerLengthPx, rulerY - 5);
+            ctx.lineTo(rulerX + rulerLengthPx, rulerY + 5);
+            ctx.stroke();
+
+            ctx.fillText("1mm", rulerX + (rulerLengthPx/2) - 15, rulerY - 10);
+        }
+
+        // Drag Logic
+        canvas.addEventListener('mousedown', e => {
+            const rect = canvas.getBoundingClientRect();
+            const mx = e.clientX - rect.left;
+            const my = e.clientY - rect.top;
+            // Einfache Hitbox um den Startpunkt
+            if (Math.abs(mx - rulerX) < 50 && Math.abs(my - rulerY) < 50) {
+                isDragging = true;
+            }
+        });
+        canvas.addEventListener('mousemove', e => {
+            if (isDragging) {
+                const rect = canvas.getBoundingClientRect();
+                rulerX = e.clientX - rect.left;
+                rulerY = e.clientY - rect.top;
+                requestAnimationFrame(drawRuler);
+            }
+        });
+        canvas.addEventListener('mouseup', () => isDragging = false);
+
+        // Init
+        setInterval(drawRuler, 1000); // Fail-safe Redraw
     </script>
 </body>
 </html>

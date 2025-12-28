@@ -1,39 +1,35 @@
 import os
-import logging
 
-# --- PFAD-KONFIGURATION (Fokus: NVMe SSD Härtung) ---
-# Alle Daten liegen auf /data (NVMe), um die SD-Karte zu schonen.[1, 2]
-DATA_ROOT = "/data"
+# --- System Paths ---
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(BASE_DIR, '..', 'data')
 
-PATHS = {
-    "dropzone": os.path.join(DATA_ROOT, "x200_rohdaten_eingang"),
-    "images": os.path.join(DATA_ROOT, "mikroskopbilder"),
-    "spectra": os.path.join(DATA_ROOT, "spektren"),
-    "climate": os.path.join(DATA_ROOT, "klimadaten"),
-    "logs": os.path.join(DATA_ROOT, "logs")
+DIRS = {
+    'SNAPSHOTS': os.path.join(DATA_DIR, 'mikroskopbilder'),
+    'SPECTRA': os.path.join(DATA_DIR, 'spektren'),
+    'CLIMATE': os.path.join(DATA_DIR, 'klimadaten'),
+    'INGEST': os.path.join(DATA_DIR, 'x200_rohdaten_eingang'),
+    'LOGS': os.path.join(DATA_DIR, 'logs')
 }
 
-# --- BACKEND & SECURITY ---
-# Flask-Logging auf ERROR begrenzen (Silent Mode) zur SSD-Schonung.[3]
-LOG_LEVEL = logging.ERROR
-# Secret Key für Session-Sicherheit.
-SECRET_KEY = os.environ.get("LAB_STATION_SECRET_KEY", "jetson_orin_super_8gb_2025")
+# Ensure directories exist
+for d in DIRS.values():
+    os.makedirs(d, exist_ok=True)
 
-# --- NAMING SCHEMES (Strikte Validierung via Regex) [4, 5] ---
-# Jede Datei muss exakt diesen Mustern entsprechen.
-# Mikroskopie: YYYYMMDD_HHMMSS_TYP_ID_POS_Licht_Pol_EXT
-REGEX_IMAGE = r"^\d{8}_\d{6}__[a-zA-Z0-9-]+_[a-zA-Z0-9-]+__[1]\.(jpg|png)$"
+# --- Hardware Config ---
+CAMERA_ID = 0
+ARDUINO_PORT = '/dev/ttyACM0'
+BAUDRATE = 115200
 
-# Spektrum: YYYYMMDD_HHMMSS_TYP_ID_POS_Modus_EXT
-# Unterstützt Stellarnet-Endungen:.abs,.trm,.ssm und.csv.
-REGEX_SPECTRUM = r"^\d{8}_\d{6}__[a-zA-Z0-9-]+_[a-zA-Z0-9-]+_(ABS|TRANS|SCOPE)\.(abs|trm|ssm|csv)$"
+# --- Naming Scheme Regex ---
+# Erlaubt: Alphanumerisch, Bindestriche, Unterstriche. Keine Leerzeichen.
+VALID_NAME_REGEX = r'^[a-zA-Z0-9_-]+$'
 
-# Klimadaten: LOG-Zeitraum_Bezeichnung_Ortsangabe_ID_EXT
-REGEX_CLIMATE = r"^LOG-\d{8}-\d{8}_[a-zA-Z0-9-]+_[a-zA-Z0-9-]+_\d+\.csv$"
-
-# --- UI & GRAFIK STANDARDS ---
-# Format für Sensor-Readouts: Exakt zwei Leerzeichen nach dem Doppelpunkt.
-SENSOR_FORMAT = "{label}:  {value}"
-
-# Metrologie: Kalibrierungsfaktor (Mikrometer pro Pixel) für den 1mm-Maßstab.
-CAL_FACTOR = 1.0
+# --- Calibration Defaults (px/mm) ---
+# Muss initial kalibriert werden
+CALIBRATION = {
+    "Micro_4x": 125.0,
+    "Micro_10x": 312.5,
+    "Micro_40x": 1250.0,
+    "Macro": 10.0
+}
