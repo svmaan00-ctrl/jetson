@@ -2,79 +2,81 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <title>Hazion Embedded System</title>
+    <title>HAZION EMBEDDED SYSTEM</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        :root { --bg: #0f0f0f; --panel: #1e1e1e; --text: #d4d4d4; --accent: #0056b3; --success: #28a745; --danger: #dc3545; }
-        body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; display: grid; grid-template-rows: 50px 1fr; height: 100vh; overflow: hidden; }
+        :root { --bg: #0a0a0a; --sidebar: #161616; --accent: #007bff; --text: #cccccc; --led-off: #333; }
+        body { background: var(--bg); color: var(--text); font-family: 'Consolas', 'Courier New', monospace; margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
         
         /* Header & Status-LEDs */
-        header { background: var(--panel); display: flex; align-items: center; padding: 0 20px; border-bottom: 1px solid #333; justify-content: space-between; }
+        header { background: #111; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; }
         .led-group { display: flex; gap: 20px; }
-        .led-box { display: flex; align-items: center; gap: 8px; font-size: 0.75rem; text-transform: uppercase; }
-        .led { width: 12px; height: 12px; border-radius: 50%; background: #333; box-shadow: inset 0 0 4px #000; }
-        .led.green { background: #0f0; box-shadow: 0 0 10px #0f0; }
-        .led.red { background: #f00; box-shadow: 0 0 10px #f00; }
-        .led.blink { animation: blink 0.8s infinite; background: #f00; }
-        @keyframes blink { 50% { opacity: 0.2; } }
+        .led-box { display: flex; align-items: center; gap: 8px; font-size: 0.7rem; }
+        .led { width: 12px; height: 12px; border-radius: 50%; background: var(--led-off); }
+        .led.green { background: #0f0; box-shadow: 0 0 8px #0f0; }
+        .led.red { background: #f00; box-shadow: 0 0 8px #f00; }
 
-        /* Layout */
-        main { display: grid; grid-template-columns: 320px 1fr; gap: 0; }
-        aside { background: var(--panel); border-right: 1px solid #333; padding: 15px; display: flex; flex-direction: column; gap: 15px; }
+        main { display: flex; flex: 1; }
         
-        /* Viewport & Scale */
-        #viewport { position: relative; background: #000; display: flex; justify-content: center; align-items: center; overflow: hidden; }
-        #video_feed { max-width: 100%; max-height: 100%; object-fit: contain; }
+        /* Sidebar: Permanent Controls & Values */
+        aside { width: 340px; background: var(--sidebar); border-right: 1px solid #333; padding: 15px; display: flex; flex-direction: column; gap: 20px; box-sizing: border-box; }
+        .section-title { font-size: 0.75rem; color: #555; border-bottom: 1px solid #333; padding-bottom: 5px; margin-bottom: 10px; font-weight: bold; }
+        
+        /* Mode Buttons */
+        .btn-stack { display: flex; flex-direction: column; gap: 5px; }
+        .mode-btn { padding: 12px; background: #222; border: 1px solid #444; color: #888; cursor: pointer; text-align: left; transition: 0.3s; }
+        .mode-btn.active { background: var(--accent); color: white; border-color: #0056b3; }
+
+        /* Naming Scheme Form */
+        .input-group { background: #1e1e1e; padding: 10px; border-radius: 4px; }
+        select, input { width: 100%; background: #000; color: #fff; border: 1px solid #444; padding: 8px; margin-bottom: 8px; box-sizing: border-box; }
+        
+        /* Permanent Sensor Display: Two Spaces after Colon */
+        .sidebar-values { background: #111; padding: 10px; border: 1px solid #333; }
+        .val-line { font-size: 0.95rem; margin: 5px 0; font-weight: bold; }
+
+        /* Main Viewport */
+        #viewport { flex: 1; position: relative; background: #000; display: flex; justify-content: center; align-items: center; }
+        #video_feed { max-width: 100%; max-height: 100%; display: block; }
         #overlay_canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
-
-        /* Controls & Formats */
-        .group-label { font-size: 0.7rem; color: #666; text-transform: uppercase; margin-bottom: 5px; font-weight: bold; border-bottom: 1px solid #333; padding-bottom: 3px; }
-        .control-block { background: #252525; padding: 10px; border-radius: 4px; margin-bottom: 10px; }
-        select, input { width: 100%; background: #333; border: 1px solid #444; color: #fff; padding: 6px; margin: 5px 0; font-size: 0.85rem; }
         
-        .mode-btn-group { display: flex; gap: 5px; margin-bottom: 15px; }
-        .mode-btn { flex: 1; padding: 8px; background: #333; border: none; color: #888; cursor: pointer; font-size: 0.75rem; font-weight: bold; transition: 0.2s; }
-        .mode-btn.active { background: var(--accent); color: white; }
-
-        /* Sensor Display (Strict Formatting) */
-        .sensor-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-        .sensor-card { background: #1a1a1a; padding: 8px; border-radius: 3px; border: 1px solid #333; }
-        .sensor-label { font-size: 0.65rem; color: #777; }
-        .sensor-value { font-size: 1rem; font-family: 'Courier New', monospace; font-weight: bold; }
-
-        button#btn_save { width: 100%; padding: 12px; background: var(--success); color: white; border: none; font-weight: bold; cursor: pointer; margin-top: 10px; }
-        button#btn_save:disabled { background: #444; cursor: not-allowed; }
+        /* Climate Chart View */
+        #chart_view { display: none; width: 100%; height: 100%; padding: 30px; box-sizing: border-box; background: #050505; }
+        
+        button#save_btn { width: 100%; padding: 15px; background: #28a745; color: white; border: none; font-weight: bold; cursor: pointer; margin-top: 10px; }
     </style>
 </head>
 <body>
     <header>
-        <div style="font-weight: bold; letter-spacing: 1px;">HAZION EMBEDDED SYSTEM</div>
+        <div style="font-weight: bold; letter-spacing: 2px;">HAZION EMBEDDED SYSTEM</div>
         <div class="led-group">
-            <div class="led-box"><div class="led" id="led_micro"></div> Mikroskop </div>
-            <div class="led-box"><div class="led" id="led_spec"></div> Spektrum </div>
-            <div class="led-box"><div class="led" id="led_clim"></div> Klima </div>
+            <div class="led-box"><div class="led" id="led_micro"></div> MIKROSKOP</div>
+            <div class="led-box"><div class="led" id="led_spec"></div> SPEKTRUM</div>
+            <div class="led-box"><div class="led" id="led_clim"></div> KLIMA</div>
         </div>
     </header>
+
     <main>
         <aside>
-            <div class="group-label">Betriebsmodus</div>
-            <div class="mode-btn-group">
-                <button class="mode-btn active" onclick="setMode('micro', this)">Mikroskop-Modus</button>
-                <button class="mode-btn" onclick="setMode('spec', this)">Spektrum-Modus</button>
-                <button class="mode-btn" onclick="setMode('clim', this)">Klimadaten-Modus</button>
+            <div class="section-title">BETRIEBSMODUS</div>
+            <div class="btn-stack">
+                <button class="mode-btn active" id="btn_micro" onclick="setMode('micro')">Mikroskop-Modus</button>
+                <button class="mode-btn" id="btn_spec" onclick="setMode('spec')">Spektrum-Modus</button>
+                <button class="mode-btn" id="btn_clim" onclick="setMode('clim')">Klimadaten-Modus</button>
             </div>
 
-            <div class="group-label">Naming Scheme (ML-Konform)</div>
-            <div class="control-block">
+            <div class="section-title">NAMING SCHEME</div>
+            <div class="input-group">
                 <select id="inp_typ">
                     <option value="B">Bohrprobe (B)</option>
                     <option value="W">Wischprobe (W)</option>
                     <option value="M">Material (M)</option>
                     <option value="R">Referenz (R)</option>
                 </select>
-                <input type="text" id="inp_id" placeholder="Projekt-ID" oninput="validate()">
-                <input type="text" id="inp_pos" placeholder="Position/Ort" oninput="validate()">
+                <input type="text" id="inp_id" placeholder="Projekt/Proben-ID">
+                <input type="text" id="inp_pos" placeholder="Position (z.B. L1)">
                 
-                <div id="micro_options">
+                <div id="micro_extra">
                     <select id="inp_licht">
                         <option value="R">Ring (R)</option>
                         <option value="C">Coax (C)</option>
@@ -85,105 +87,122 @@
                         <option value="On">Pol: Ein</option>
                         <option value="Off">Pol: Aus</option>
                     </select>
-                    <select id="inp_mag" onchange="updateScale()">
-                        <option value="Micro_4x">Objektiv 4x</option>
-                        <option value="Micro_10x">Objektiv 10x</option>
-                        <option value="Micro_40x">Objektiv 40x</option>
-                    </select>
                 </div>
-                <div id="preview" style="font-size: 0.6rem; color: #555; margin-top: 5px;"></div>
-                <button id="btn_save" onclick="saveData()">DATENSATZ SPEICHERN</button>
+                <button id="save_btn" onclick="saveData()">DATENSATZ SPEICHERN</button>
             </div>
 
-            <div class="group-label">Umweltparameter</div>
-            <div class="control-block">
-                <div class="sensor-row">
-                    <div class="sensor-card"><div class="sensor-label">T1 (°C)</div><div class="sensor-value" id="val_t1">T1:  --.-</div></div>
-                    <div class="sensor-card"><div class="sensor-label">RH1 (%)</div><div class="sensor-value" id="val_rh1">RH1:  --.-</div></div>
-                    <div class="sensor-card"><div class="sensor-label">T2 (°C)</div><div class="sensor-value" id="val_t2">T2:  --.-</div></div>
-                    <div class="sensor-card"><div class="sensor-label">RH2 (%)</div><div class="sensor-value" id="val_rh2">RH2:  --.-</div></div>
-                </div>
-                <div class="sensor-card" style="margin-top:8px; text-align: center;">
-                    <div class="sensor-label">Gas (ppm)</div><div class="sensor-value" id="val_gas">GAS:  ---</div>
-                </div>
+            <div class="section-title">ECHTZEIT-ÜBERWACHUNG</div>
+            <div class="sidebar-values">
+                <div class="val-line" id="disp_gas" style="color:#ffcc00;">Gas:  --- ppm</div>
+                <div class="val-line" id="disp_t1">T1:  --.- °C</div>
+                <div class="val-line" id="disp_rh1">RH1:  --.- %</div>
+                <div class="val-line" id="disp_t2">T2:  --.- °C</div>
+                <div class="val-line" id="disp_rh2">RH2:  --.- %</div>
             </div>
         </aside>
-        
-        <div id="viewport">
-            <img id="video_feed" src="/video_feed">
-            <canvas id="overlay_canvas"></canvas>
-        </div>
+
+        <section id="viewport">
+            <div id="video_layer" style="width:100%; height:100%; display:flex; justify-content:center; align-items:center;">
+                <img id="video_feed" src="/video_feed">
+                <canvas id="overlay_canvas"></canvas>
+            </div>
+            <div id="chart_view">
+                <canvas id="climateChart"></canvas>
+            </div>
+        </section>
     </main>
 
     <script>
         let currentMode = 'micro';
-        const calibration = { "Micro_4x": 125.0, "Micro_10x": 312.5, "Micro_40x": 1250.0 };
-        
-        const evtSource = new EventSource("/stream");
-        evtSource.onmessage = (e) => {
-            const data = JSON.parse(e.data);
-            if(data.type === 'climate_update') {
-                const v = data.payload.values;
-                // Präzisionsvorgabe: Zwei Leerzeichen nach Doppelpunkt
-                document.getElementById('val_t1').innerText = `T1:  ${v.t1.toFixed(1)}`;
-                document.getElementById('val_t2').innerText = `T2:  ${v.t2.toFixed(1)}`;
-                document.getElementById('val_rh1').innerText = `RH1:  ${v.rh1.toFixed(1)}`;
-                document.getElementById('val_rh2').innerText = `RH2:  ${v.rh2.toFixed(1)}`;
-                document.getElementById('val_gas').innerText = `GAS:  ${v.gas}`;
-                updateLeds(data.payload.leds);
-            }
-        };
-
-        function setMode(mode, btn) {
-            currentMode = mode;
-            document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            document.getElementById('micro_options').style.display = (mode === 'micro') ? 'block' : 'none';
-            drawScale();
-        }
-
-        function validate() {
-            const regex = /^[a-zA-Z0-9_-]+$/;
-            const idValid = regex.test(document.getElementById('inp_id').value);
-            const posValid = regex.test(document.getElementById('inp_pos').value);
-            document.getElementById('btn_save').disabled = !(idValid && posValid);
-        }
-
-        /* --- Metrologie: 1mm Maßstab fixiert unten rechts --- */
         const canvas = document.getElementById('overlay_canvas');
         const ctx = canvas.getContext('2d');
         const video = document.getElementById('video_feed');
 
+        // Chart.js Initialisierung
+        const chartCtx = document.getElementById('climateChart').getContext('2d');
+        const climateChart = new Chart(chartCtx, {
+            type: 'line',
+            data: { labels: [], datasets: [
+                { label: 'T1 (°C)', data: [], borderColor: '#ff4444', backgroundColor: 'rgba(255,68,68,0.1)', fill: true },
+                { label: 'RH1 (%)', data: [], borderColor: '#4444ff', backgroundColor: 'rgba(68,68,255,0.1)', fill: true }
+            ]},
+            options: { responsive: true, maintainAspectRatio: false, scales: { y: { grid: { color: '#222' } }, x: { grid: { color: '#222' } } } }
+        });
+
+        // SSE Connection [cite: 73, 213, 232]
+        const evtSource = new EventSource("/stream");
+        evtSource.onmessage = function(e) {
+            const data = JSON.parse(e.data);
+            if(data.type === 'climate_update') {
+                const v = data.payload.values;
+                // Präzisionsformatierung: Zwei Leerzeichen
+                document.getElementById('disp_gas').innerText = `Gas:  ${v.gas} ppm`;
+                document.getElementById('disp_t1').innerText = `T1:  ${v.t1.toFixed(1)} °C`;
+                document.getElementById('disp_t2').innerText = `T2:  ${v.t2.toFixed(1)} °C`;
+                document.getElementById('disp_rh1').innerText = `RH1:  ${v.rh1.toFixed(1)} %`;
+                document.getElementById('disp_rh2').innerText = `RH2:  ${v.rh2.toFixed(1)} %`;
+                
+                updateChart(v.t1, v.rh1);
+                updateLeds(data.payload.leds);
+            }
+        };
+
+        function setMode(mode) {
+            currentMode = mode;
+            // Buttons UI
+            document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById('btn_' + mode).classList.add('active');
+
+            // Sichtbarkeit umschalten
+            document.getElementById('video_layer').style.display = (mode === 'clim') ? 'none' : 'flex';
+            document.getElementById('chart_view').style.display = (mode === 'clim') ? 'block' : 'none';
+            document.getElementById('micro_extra').style.display = (mode === 'micro') ? 'block' : 'none';
+            
+            if(mode === 'micro') drawScale();
+        }
+
+        function updateChart(t, rh) {
+            const timeLabel = new Date().toLocaleTimeString();
+            climateChart.data.labels.push(timeLabel);
+            climateChart.data.datasets[0].data.push(t);
+            climateChart.data.datasets[1].data.push(rh);
+            if(climateChart.data.labels.length > 30) {
+                climateChart.data.labels.shift();
+                climateChart.data.datasets.forEach(d => d.data.shift());
+            }
+            climateChart.update('none');
+        }
+
+        function updateLeds(leds) {
+            ['micro', 'spec', 'clim'].forEach(sys => {
+                document.getElementById('led_' + sys).className = 'led ' + leds[sys];
+            });
+        }
+
+        // 1mm Maßstab: Unten rechts fixiert
         function drawScale() {
             canvas.width = video.clientWidth;
             canvas.height = video.clientHeight;
             if(currentMode !== 'micro') return;
 
-            const mag = document.getElementById('inp_mag').value;
-            const pxPerMm = calibration[mag];
-            const scaleFactor = canvas.width / 960.0; // Basierend auf Stream-Resolution
+            const pxPerMm = 125.0; // Standard 4x
+            const scaleFactor = canvas.width / 960.0; 
             const len = pxPerMm * scaleFactor;
 
-            // Fixiert unten rechts
-            const x = canvas.width - len - 40;
-            const y = canvas.height - 40;
+            const x = canvas.width - len - 20;
+            const y = canvas.height - 30;
 
-            ctx.strokeStyle = "#0f0";
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(x, y); ctx.lineTo(x + len, y);
+            ctx.strokeStyle = "#0f0"; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + len, y);
             ctx.moveTo(x, y-5); ctx.lineTo(x, y+5);
-            ctx.moveTo(x+len, y-5); ctx.lineTo(x+len, y+5);
-            ctx.stroke();
+            ctx.moveTo(x+len, y-5); ctx.lineTo(x+len, y+5); ctx.stroke();
 
-            ctx.fillStyle = "#0f0";
-            ctx.font = "bold 14px monospace";
-            ctx.textAlign = "center";
-            ctx.fillText("1mm", x + (len/2), y - 10); // Zentriert über der Linie
+            ctx.fillStyle = "#0f0"; ctx.font = "bold 13px monospace"; ctx.textAlign = "center";
+            ctx.fillText("1mm", x + (len/2), y - 10);
         }
-        
+
         window.addEventListener('resize', drawScale);
-        setInterval(drawScale, 500);
+        setInterval(() => { if(currentMode === 'micro') drawScale(); }, 1000);
     </script>
 </body>
 </html>
