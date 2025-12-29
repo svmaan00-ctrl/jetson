@@ -2,71 +2,180 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HAZION LAB SYSTEM</title>
+    <title>Hazion Lab System</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        :root { --bg: #050505; --panel: #111; --accent: #00ffcc; --text: #eee; }
-        body { background: var(--bg); color: var(--text); font-family: sans-serif; margin: 0; display: flex; flex-direction: column; height: 100vh; }
-        header { padding: 15px; background: #000; border-bottom: 2px solid var(--accent); display: flex; justify-content: space-between; }
-        .main-container { display: grid; grid-template-columns: 300px 1fr; flex: 1; overflow: hidden; }
-        .sidebar { background: var(--panel); padding: 20px; border-right: 1px solid #222; overflow-y: auto; }
-        .viewport { padding: 20px; display: flex; flex-direction: column; align-items: center; background: #080808; position: relative; }
-        
-        .mode-btn { width: 100%; padding: 12px; margin-bottom: 10px; border: 1px solid #333; background: #1a1a1a; color: white; cursor: pointer; border-radius: 4px; }
-        .mode-btn.active { border-color: var(--accent); background: #004433; }
-        .mode-btn:active { background: var(--accent); color: black; }
-
-        .led { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 5px; background: #333; }
-        .led-green { background: #0f0; box-shadow: 0 0 10px #0f0; }
-        .led-red { background: #f00; box-shadow: 0 0 10px #f00; }
-
-        .naming-box { background: #000; padding: 10px; border-radius: 4px; border: 1px solid #222; font-family: monospace; font-size: 0.8rem; margin-top: 20px; color: #888; }
-        .sensor-card { background: #1a1a1a; padding: 15px; border-radius: 8px; margin-bottom: 10px; border-left: 4px solid var(--accent); }
-        
-        #video_feed { max-width: 100%; border: 2px solid #222; }
-        .hidden { display: none; }
-        
-        #scale_overlay {
-            position: absolute; bottom: 40px; right: 40px; width: 100px; /* 100px = 1mm bei Default Cal */
-            border-bottom: 3px solid white; text-align: center; font-size: 12px; text-shadow: 1px 1px 2px black;
+        :root {
+            --bg: #0d0d0d; --sidebar: #161616; --border: #2a2a2a;
+            --text: #e0e0e0; --accent: #444; --graph-blue: #3894ff; --graph-violet: #a371f7;
         }
+        * { box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+        body { background-color: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        
+        header { height: 50px; background: #111; border-bottom: 1px solid var(--border); display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 0 20px; }
+        .brand { grid-column: 2; font-size: 1.2rem; font-weight: 700; letter-spacing: 1px; }
+
+        main { display: grid; grid-template-columns: 290px 1fr; flex: 1; overflow: hidden; }
+        aside { background: var(--sidebar); border-right: 1px solid var(--border); padding: 15px; display: flex; flex-direction: column; gap: 10px; overflow: hidden; }
+        
+        .section-title { font-size: 0.65rem; color: #666; font-weight: 800; text-transform: uppercase; border-bottom: 1px solid #222; margin-bottom: 5px; }
+        
+        /* Status LEDs in der Sidebar */
+        .status-row { display: flex; justify-content: space-between; padding: 5px 0; margin-bottom: 5px; }
+        .led-item { display: flex; align-items: center; gap: 8px; font-size: 0.7rem; color: #888; }
+        .led { width: 10px; height: 10px; border-radius: 50%; background: #333; transition: background 0.3s, box-shadow 0.3s; }
+        .led.green { background: #4caf50; box-shadow: 0 0 8px #4caf50; }
+        .led.red { background: #f44336; box-shadow: 0 0 8px #f44336; }
+
+        .nav-btn { width: 100%; padding: 10px; background: #222; border: 1px solid var(--border); color: var(--text); border-radius: 4px; cursor: pointer; text-align: left; font-size: 0.8rem; margin-bottom: 4px; }
+        .nav-btn.active { background: var(--accent); border-color: #555; }
+
+        select, input { width: 100%; background: #000; color: #fff; border: 1px solid var(--border); padding: 8px; border-radius: 4px; font-size: 0.8rem; margin-bottom: 5px; }
+
+        .sensor-card { background: #0a0a0a; padding: 10px; border-radius: 4px; border: 1px solid #222; }
+        .sensor-line { font-size: 0.85rem; margin: 4px 0; font-weight: 500; white-space: pre; }
+
+        #viewport { flex: 1; background: #000; display: flex; align-items: center; justify-content: center; position: relative; }
+        #chart_view { display: none; width: 100%; height: 100%; padding: 25px; }
+        #video_feed { max-width: 100%; max-height: 100%; }
+        .save-btn { width: 100%; padding: 12px; background: #238636; color: white; border: none; font-weight: bold; cursor: pointer; border-radius: 4px; font-size: 0.8rem; }
     </style>
 </head>
 <body>
+    <header><div class="brand">Hazion Lab System</div></header>
+    <main>
+        <aside>
+            <div class="section-title">System Status</div>
+            <div class="status-row">
+                <div class="led-item"><div id="led_micro" class="led"></div> MIK</div>
+                <div class="led-item"><div id="led_spec" class="led"></div> SPEK</div>
+                <div class="led-item"><div id="led_clim" class="led"></div> KLIM</div>
+            </div>
 
-<header>
-    <div style="font-weight: bold; letter-spacing: 1px;">HAZION EMBEDDED SYSTEM v2.1</div>
-    <div>
-        <span class="led" id="led_micro"></span> Vision 
-        <span class="led" id="led_spec"></span> Spec 
-        <span class="led" id="led_clim"></span> Klima
-    </div>
-</header>
+            <div class="section-title">Betriebsmodus</div>
+            <button class="nav-btn active" id="btn_micro" onclick="setMode('micro')">Mikroskopie</button>
+            <button class="nav-btn" id="btn_spec" onclick="setMode('spec')">Spektrometrie</button>
+            <button class="nav-btn" id="btn_clim" onclick="setMode('clim')">Klimaüberwachung</button>
 
-<div class="main-container">
-    <aside class="sidebar">
-        <button class="mode-btn" id="btn_micro" onclick="setMode('micro')">Mikroskop-Modus</button>
-        <button class="mode-btn" id="btn_spec" onclick="setMode('spec')">Spektrum-Modus</button>
-        <button class="mode-btn" id="btn_clim" onclick="setMode('clim')">Klimadaten-Modus</button>
-        
-        <hr style="border: 0; border-top: 1px solid #333; margin: 20px 0;">
-        
-        <label>Proben-Typ:</label>
-        <select id="inp_typ" onchange="updateNaming()">
-            <option value="B">Bohrprobe (B)</option>
-            <option value="W">Wischprobe (W)</option>
-            <option value="M">Material (M)</option>
-            <option value="R">Referenz (R)</option>
-        </select>
+            <div class="section-title">Konfiguration</div>
+            <select id="inp_typ">
+                <option value="B">Bohrprobe (B)</option>
+                <option value="W">Wischprobe (W)</option>
+                <option value="M">Material (M)</option>
+                <option value="R">Referenz (R)</option>
+            </select>
+            <input type="text" id="inp_id" placeholder="ID (z.B. P-01)">
+            <input type="text" id="inp_pos" placeholder="POS (z.B. L1)">
+            
+            <div id="micro_opts">
+                <select id="inp_licht"><option value="R">Ring (R)</option><option value="C">Coax (C)</option><option value="S">Side (S)</option></select>
+                <select id="inp_pol"><option value="On">Pol: Ein</option><option value="Off">Pol: Aus</option></select>
+            </div>
+            <div id="spec_opts" style="display:none;">
+                <select id="inp_spec_mode">
+                    <option value="Abs">Absorption</option>
+                    <option value="Trans">Transmission</option>
+                    <option value="Scope">Scope</option>
+                </select>
+            </div>
+            <div id="clim_opts" style="display:none;">
+                <input type="number" id="inp_interval" value="1" min="1" placeholder="Intervall (Sek)">
+            </div>
+            <button class="save-btn" onclick="saveData()">DATENSATZ SPEICHERN</button>
 
-        <label>ID:</label>
-        <input type="text" id="inp_id" placeholder="ID eingeben" oninput="updateNaming()">
+            <div class="section-title" id="sensor_title" style="display:none;">Echtzeit-Klima</div>
+            <div class="sensor-card" id="sensor_box" style="display:none;">
+                <div class="sensor-line" id="disp_gas">Gas:  --- ppm</div>
+                <div class="sensor-line" id="disp_t1">T1:  --.- °C</div>
+                <div class="sensor-line" id="disp_t2">T2:  --.- °C</div>
+                <div class="sensor-line" id="disp_rh1">RH1:  --.- %</div>
+                <div class="sensor-line" id="disp_rh2">RH2:  --.- %</div>
+            </div>
+        </aside>
 
-        <div id="micro_controls">
-            <label>Licht:</label>
-            <select id="inp_licht" onchange="updateNaming()">
-                <option value="R">Ring</option>
-                <option value="C">Coax</option>
-                <option value="S">Side</option>
-                <option value="O">Off</option>
-            </select
+        <section id="viewport">
+            <div id="video_wrap" style="width:100%; height:100%; display:flex; justify-content:center; align-items:center;">
+                <img id="video_feed" src="/video_feed">
+                <canvas id="overlay_canvas" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;"></canvas>
+            </div>
+            <div id="chart_view"><canvas id="climateChart"></canvas></div>
+        </section>
+    </main>
+
+    <script>
+        let currentMode = 'micro';
+        const chartCtx = document.getElementById('climateChart').getContext('2d');
+        const climateChart = new Chart(chartCtx, {
+            type: 'line',
+            data: { labels: [], datasets: [
+                { label: 'T1', data: [], borderColor: '#3894ff', tension: 0.1, pointRadius: 0 },
+                { label: 'T2', data: [], borderColor: '#265fa3', tension: 0.1, pointRadius: 0 },
+                { label: 'RH1', data: [], borderColor: '#a371f7', tension: 0.1, pointRadius: 0 },
+                { label: 'RH2', data: [], borderColor: '#734dbd', tension: 0.1, pointRadius: 0 }
+            ]},
+            options: { responsive: true, maintainAspectRatio: false, scales: { x: { grid: { color: '#1a1a1a' } }, y: { grid: { color: '#1a1a1a' } } } }
+        });
+
+        const evtSource = new EventSource("/stream");
+        evtSource.onmessage = (e) => {
+            const data = JSON.parse(e.data);
+            if(data.type === 'climate_update') {
+                const v = data.payload.values;
+                // Zwei Leerzeichen für Präzision
+                document.getElementById('disp_gas').innerText = `Gas:  ${v.gas} ppm`;
+                document.getElementById('disp_t1').innerText = `T1:  ${v.t1.toFixed(1)} °C`;
+                document.getElementById('disp_t2').innerText = `T2:  ${v.t2.toFixed(1)} °C`;
+                document.getElementById('disp_rh1').innerText = `RH1:  ${v.rh1.toFixed(1)} %`;
+                document.getElementById('disp_rh2').innerText = `RH2:  ${v.rh2.toFixed(1)} %`;
+                
+                if(currentMode === 'clim') {
+                    const time = new Date().toLocaleTimeString();
+                    climateChart.data.labels.push(time);
+                    [v.t1, v.t2, v.rh1, v.rh2].forEach((val, i) => climateChart.data.datasets[i].data.push(val));
+                    if(climateChart.data.labels.length > 20) {
+                        climateChart.data.labels.shift();
+                        climateChart.data.datasets.forEach(d => d.data.shift());
+                    }
+                    climateChart.update('none');
+                }
+                updateLeds(data.payload.leds);
+            }
+        };
+
+        function setMode(mode) {
+            currentMode = mode;
+            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById('btn_' + mode).classList.add('active');
+            
+            document.getElementById('video_wrap').style.display = (mode === 'clim') ? 'none' : 'flex';
+            document.getElementById('chart_view').style.display = (mode === 'clim') ? 'block' : 'none';
+            document.getElementById('sensor_box').style.display = (mode === 'clim') ? 'block' : 'none';
+            document.getElementById('sensor_title').style.display = (mode === 'clim') ? 'block' : 'none';
+            
+            document.getElementById('micro_opts').style.display = (mode === 'micro') ? 'block' : 'none';
+            document.getElementById('spec_opts').style.display = (mode === 'spec') ? 'block' : 'none';
+            document.getElementById('clim_opts').style.display = (mode === 'clim') ? 'block' : 'none';
+        }
+
+        function updateLeds(leds) {
+            ['micro', 'spec', 'clim'].forEach(sys => {
+                const el = document.getElementById('led_' + sys);
+                if(el && leds[sys]) {
+                    el.className = 'led ' + leds[sys];
+                }
+            });
+        }
+
+        function saveData() {
+            const payload = {
+                mode: currentMode, typ: document.getElementById('inp_typ').value,
+                id: document.getElementById('inp_id').value, pos: document.getElementById('inp_pos').value,
+                licht: document.getElementById('inp_licht').value, pol: document.getElementById('inp_pol').value,
+                spec_mode: document.getElementById('inp_spec_mode').value
+            };
+            fetch('/api/save_data', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) })
+            .then(r => r.json()).then(d => alert("Gespeichert: " + d.file));
+        }
+    </script>
+</body>
+</html>

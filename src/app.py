@@ -54,9 +54,15 @@ def stream():
 def video_feed():
     def gen():
         while True:
-            f = cam.get_frame()
-            if f: yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + f + b'\r\n')
-            time.sleep(0.04)
+            frame_bytes = cam.get_frame()
+            if frame_bytes is not None:
+                # Hier dürfen keine Prints oder sleeps stehen, die den Stream bremsen
+                yield (b'--frame\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+            else:
+                # Falls kein Bild kommt, eine winzige Pause, um CPU-Last zu vermeiden
+                time.sleep(0.01)
+                
     return Response(gen(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @app.route('/api/freeze', methods=['POST'])
