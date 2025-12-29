@@ -1,86 +1,98 @@
 from flask import Flask, render_template, Response, request, jsonify
-from config import DIRS, ARDUINO_PORT, BAUDRATE
 from data_manager import DataManager
 from camera_engine import CameraEngine
 from file_monitor import start_watchdog
+from config import DIRS
 import threading
 import serial
 import time
 import os
 from datetime import datetime
 
-app = Flask(__name__, template_folder='../templates')
+# Flask Setup
+base_path = os.path.dirname(os.path.abspath(__file__))
+template_path = os.path.join(base_path, '..', 'templates')
+app = Flask(__name__, template_folder=template_path)
+
 dm = DataManager()
 cam = CameraEngine()
 
+# Start Hardware
+cam.start_stream()
+start_watchdog()
+
 def arduino_bridge():
-    """Liest Arduino-Daten (Tab-getrennt)"""
+    """Liest Arduino: T1\\tH1\\tT2\\tH2\\tGasAnalog\\tAlarm"""
     while True:
         try:
-            ser = serial.Serial(ARDUINO_PORT, BAUDRATE, timeout=1)
+            ser = serial.Serial('/dev/ttyACM0', 115200, timeout=1)
             dm.set_led("clim", "green")
             while True:
                 line = ser.readline().decode('utf-8', errors='ignore').strip()
                 if line and "\t" in line:
-                    parts = line.split("\t")
-                    if len(parts) >= 5:
-                        vals = [float(p) for p in parts[:5]]
-                        dm.update_sensors(*vals)
-        except Exception as e:
+                    p = line.split("\t")
+                    if len(p) >= 5:
+                        # Mapping auf DataManager
+                        dm.update_sensors(float(p[0]), float(p[2]), float(p[1]), float(p[3]), int(p[4]))
+        except:
             dm.set_led("clim", "red")
             time.sleep(5)
 
-# Threads starten
 threading.Thread(target=arduino_bridge, daemon=True).start()
-start_watchdog() # Monitor für x200_rohdaten_eingang
-cam.start_stream()
 
 @app.route('/')
-def index():
-    return render_template('index.html')
+def index(): return render_template('index.html')
 
 @app.route('/stream')
 def stream():
     def event_stream():
         q = dm.listen()
-        while True:
-            yield q.get()
-    return Response(event_stream(), mimetype="text/event-stream")
+        while True: yield q.get()
+    return Response(event_stream(), mimetype='text/event-stream')
 
 @app.route('/video_feed')
 def video_feed():
     def gen():
         while True:
-            frame = cam.get_frame()
-            if frame:
-                yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+            f = cam.get_frame()
+            if f: yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + f + b'\r\n')
             time.sleep(0.04)
     return Response(gen(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @app.route('/api/freeze', methods=['POST'])
-def toggle_freeze():
-    state = cam.toggle_freeze()
-    return jsonify({"frozen": state})
+def freeze():
+    return jsonify({"frozen": cam.toggle_freeze()})
 
 @app.route('/api/save_data', methods=['POST'])
 def save_data():
     data = request.json
     mode = data.get('mode')
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    
-    # Naming Scheme Engine
+    typ = data.get('typ', 'R')
+    id_val = data.get('id', 'ID').replace(" ", "_")
+    pos = data.get('pos', 'POS').replace(" ", "_")
+
+    # --- NAMING SCHEME IMPLEMENTATION ---
     if mode == 'micro':
-        filename = f"{ts}_{data['typ']}_{data['id']}_{data['pos']}_{data['licht']}_{data['pol']}.jpg"
-        path = os.path.join(DIRS['SNAPSHOTS'], filename)
-        if cam.take_snapshot(path):
-            return jsonify({"status": "success", "file": filename})
+        # YYYYMMDD_HHMMSS_TYP_ID_POS_Licht_Pol_EXT
+        fn = f"{ts}_{typ}_{id_val}_{pos}_{data['licht']}_{data['pol']}.jpg"
+        path = os.path.join(DIRS['SNAPSHOTS'], fn)
+        if cam.take_snapshot(path): return jsonify({"status": "success", "file": fn})
             
     elif mode == 'spec':
-        filename = f"{ts}_{data['typ']}_{data['id']}_{data['pos']}_{data['spec_mode']}.csv"
-        # Hier würde die Logik zum Verschieben aus dem Ingest-Ordner greifen
-        return jsonify({"status": "success", "file": filename})
+        # YYYYMMDD_HHMMSS_TYP_ID_POS_Modus_EXT
+        fn = f"{ts}_{typ}_{id_val}_{pos}_{data['spec_mode']}.abs"
+        # Hier Ingest-Logik einfügen (Verschieben aus Drop-Zone)
+        return jsonify({"status": "success", "file": fn})
+
+    elif mode == 'clim':
+        # LOG-Zeitraum_Bezeichnung_Ortsangabe_ID_EXT
+        fn = f"LOG-{ts}_{typ}_{pos}_{id_val}.csv"
+        path = os.path.join(DIRS['CLIMATE'], fn)
+        # Logik zum Schreiben der CSV...
+        return jsonify({"status": "success", "file": fn})
 
     return jsonify({"status": "error"}), 400
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
+    app.run(host='0.0.0.0', port=5000, threaded=True)

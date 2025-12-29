@@ -1,8 +1,8 @@
 import os
 
-# --- System Paths ---
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(BASE_DIR, '..', 'data')
+# --- Absolute Pfade auf der NVMe SSD ---
+BASE_DIR = "/home/jetson/inspection_project"
+DATA_DIR = os.path.join(BASE_DIR, "data")
 
 DIRS = {
     'SNAPSHOTS': os.path.join(DATA_DIR, 'mikroskopbilder'),
@@ -12,24 +12,15 @@ DIRS = {
     'LOGS': os.path.join(DATA_DIR, 'logs')
 }
 
-# Ensure directories exist
+# Verzeichnisse automatisch anlegen
 for d in DIRS.values():
     os.makedirs(d, exist_ok=True)
 
-# --- Hardware Config ---
-CAMERA_ID = 0
+# --- Hardware ---
+CAMERA_ID = 0          # Dino-Lite USB
 ARDUINO_PORT = '/dev/ttyACM0'
 BAUDRATE = 115200
 
-# --- Naming Scheme Regex ---
-# Erlaubt: Alphanumerisch, Bindestriche, Unterstriche. Keine Leerzeichen.
-VALID_NAME_REGEX = r'^[a-zA-Z0-9_-]+$'
-
-# --- Calibration Defaults (px/mm) ---
-# Muss initial kalibriert werden
-CALIBRATION = {
-    "Micro_4x": 125.0,
-    "Micro_10x": 312.5,
-    "Micro_40x": 1250.0,
-    "Macro": 10.0
-}
+# --- Metrologie ---
+# Pixel pro 1mm (Muss kalibriert werden, 250 ist ein Standard-Startwert)
+CAL_FACTOR = 250.0
