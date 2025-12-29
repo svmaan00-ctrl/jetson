@@ -1,26 +1,30 @@
 import os
 
-# --- Absolute Pfade auf der NVMe SSD ---
-BASE_DIR = "/home/jetson/inspection_project"
-DATA_DIR = os.path.join(BASE_DIR, "data")
+# Root-Verzeichnis berechnen
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+# Verzeichnisstruktur (Ergänzt um 'INGEST' für den Watchdog)
 DIRS = {
-    'SNAPSHOTS': os.path.join(DATA_DIR, 'mikroskopbilder'),
-    'SPECTRA': os.path.join(DATA_DIR, 'spektren'),
-    'CLIMATE': os.path.join(DATA_DIR, 'klimadaten'),
-    'INGEST': os.path.join(DATA_DIR, 'x200_rohdaten_eingang'),
-    'LOGS': os.path.join(DATA_DIR, 'logs')
+    "INGEST": os.path.join(BASE_DIR, "data/x200_rohdaten_eingang/"),
+    "RAW_DATA": os.path.join(BASE_DIR, "data/x200_rohdaten_eingang/"),
+    "SPECTRA": os.path.join(BASE_DIR, "data/archivierte_spektren/"),
+    "SNAPSHOTS": os.path.join(BASE_DIR, "data/archivierte_mikroskopbilder/"),
+    "LOGS": os.path.join(BASE_DIR, "data/logs/"),
+    "CLIMATE": os.path.join(BASE_DIR, "data/sensordaten/")
 }
 
-# Verzeichnisse automatisch anlegen
-for d in DIRS.values():
-    os.makedirs(d, exist_ok=True)
+# Sicherstellen, dass alle Ordner existieren
+for path in DIRS.values():
+    os.makedirs(path, exist_ok=True)
 
-# --- Hardware ---
-CAMERA_ID = 0          # Dino-Lite USB
-ARDUINO_PORT = '/dev/ttyACM0'
-BAUDRATE = 115200
+# Hardware Config für Dino-Lite (USB)
+SERIAL_PORT = "/dev/ttyACM0"
+BAUD_RATE = 115200
 
-# --- Metrologie ---
-# Pixel pro 1mm (Muss kalibriert werden, 250 ist ein Standard-Startwert)
-CAL_FACTOR = 250.0
+# GStreamer Pipeline für Dino-Lite AM7815MZT
+# Spezialisierte Pipeline für Dino-Lite AM7815MZT
+GST_PIPELINE = (
+    "v4l2src device=/dev/video0 ! "
+    "image/jpeg, width=1280, height=720, framerate=30/1 ! "
+    "jpegdec ! videoconvert ! video/x-raw, format=BGR ! appsink drop=true"
+)

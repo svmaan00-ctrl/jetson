@@ -81,7 +81,7 @@ Visuelles Feedback: Buttons leuchten bei Klick kurz auf (Active State).
 📦 AP 4: UI-Präzision (Abgeschlossen)
 [x] 1mm-Maßstab Overlay Konzept.
 
-[x] Naming Scheme Validator (Regex).
+[prüfen] Naming Scheme Validator (Regex).
 
 📦 AP 5: Frontend – Dashboard (Abgeschlossen)
 [x] 3-Mode-Toggle (HTML/CSS).
@@ -94,11 +94,18 @@ Die folgenden Pakete adressieren die im Untersuchungsbericht festgestellten Defi
 📦 AP 6: Hardware-Integration & Low-Level Fixes
 Ziel: Stabilisierung der Peripherie (Kamera, Licht, Sensoren).
 
-[ ] Video-Engine Rewrite: Ersetzen von nvarguscamerasrc durch v4l2src mit MJPEG-Decoding (nvv4l2decoder mjpeg=1), um das "Rödeln" zu beheben und 30FPS zu garantieren.
+[x] Video-Engine Rewrite: Ersetzen von nvarguscamerasrc durch v4l2src mit MJPEG-Decoding (nvv4l2decoder mjpeg=1), um das "Rödeln" zu beheben und 30FPS zu garantieren.
 
 [ ] LED-Steuerung (Linux): Implementierung von subprocess-Aufrufen für uvcdynctrl, um Ringlicht, Coax und LEDs per Software zu schalten (Ersetzt Mock-Logik).
 
 [ ] Sensor-Bridge Serial: Implementierung von pyserial mit Reconnect-Schleife ("Try/Except SerialException") für robustes Lesen des Arduino-Strings (T1\tH1...).
+
+📦 AP 6.5: Dynamische Kamera-Steuerung 
+[ ] API-Route: Erstellung von /api/camera_control zur Übergabe von V4L2-Parametern.
+
+[ ] Frontend-Slider: Integration von Schiebereglern für:
+
+brightness, contrast, saturation, hue, white_balance_automatic, gamma, sharpness, focus_absolute, focus_automatic_continuous.
 
 📦 AP 7: Data Ingest & Storage Logic
 Ziel: Korrekte Verarbeitung von Spektren und Speicherung aller Daten.
@@ -134,6 +141,15 @@ Ziel: Benutzerführung und Status-Informationen.
 
 [ ] System-Test: Validierung des kompletten Flows: Probe rein -> LEDs an -> Fokus -> Freeze -> Speichern -> Validierung Dateiname.
 
+7. Aktueller Interims-Status (29.12.2025)
+Kamera: Bedingt einsatzbereit. MJPEG-Pipeline liefert Bild, erfordert aber manuelle brightness Justierung beim Start.
+
+Sensoren: STABIL. Daten werden korrekt formatiert im Frontend angezeigt.
+
+Maßstab: Grafische Logik im Backend vorhanden, aber noch nicht kalibriert oder im Frontend schaltbar.
+
+Speicherung: Logik-Entwurf vorhanden, Integrationstest ausstehend.
+
 6. System-Steuerung (Aliase)
 Alias	Funktion
 systemstart	Startet Flask, Watchdog und Sensor-Threads zentral via app.py
@@ -141,6 +157,7 @@ systemreset	Beendet Flask-Prozesse, leert Port 5000 und triggert udev
 ramcheck	Zeigt Top-Memory-Consumer (Python) auf dem Jetson
 caminfo	Listet V4L2 Formate der Kamera (v4l2-ctl --list-formats-ext)
 ledcheck	Listet verfügbare LED-Controls (uvcdynctrl -c)
+
 7. Aktueller Interims-Status (29.12.2025)
 Kamera: Aktuell instabil (Dashboard rödelt). Fix in AP 6 definiert.
 
@@ -150,7 +167,9 @@ Spektrum: Watchdog erkennt Datei, Parser scheitert aber an Header-Länge. Fix in
 
 Speicherung: Logik vorhanden, aber Pfade noch nicht final auf NVMe verlinkt.
 
-8. Empfehlungen für Phase v2.1
+8. Neue Anforderung: Schieberegler (AP 6.5)Die Steuerung erfolgt über die API-Route /api/camera_control, welche die folgenden v4l2-ctl Parameter anspricht:ParameterBereichBefehl (Beispiel)Brightness1 - 128v4l2-ctl -c brightness=XContrast1 - 32v4l2-ctl -c contrast=XFocus0 - 32v4l2-ctl -c focus_absolute=XGamma1 - 12v4l2-ctl -c gamma=X
+
+9. Empfehlungen für Phase v2.1
 Stromversorgung: Sicherstellen, dass der Jetson im 15W Modus läuft (sudo nvpmodel -m 0), da die USB-Kamera und der Arduino Strom ziehen.
 
 Beleuchtung: Das Dino-Lite Koaxial-Licht benötigt oft einen speziellen UVC-Extension-Code (0xf4 statt 0xf2). Dies muss beim Testing von AP 6 validiert werden.

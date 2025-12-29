@@ -2,43 +2,46 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <title>Hazion Lab System</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hazion Lab System v2</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
             --bg: #0d0d0d; --sidebar: #161616; --border: #2a2a2a;
             --text: #e0e0e0; --accent: #444; --graph-blue: #3894ff; --graph-violet: #a371f7;
         }
-        * { box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         body { background-color: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
         
         header { height: 50px; background: #111; border-bottom: 1px solid var(--border); display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 0 20px; }
-        .brand { grid-column: 2; font-size: 1.2rem; font-weight: 700; letter-spacing: 1px; }
+        .brand { grid-column: 2; font-size: 1.2rem; font-weight: 700; letter-spacing: 1px; color: #fff; }
 
         main { display: grid; grid-template-columns: 290px 1fr; flex: 1; overflow: hidden; }
-        aside { background: var(--sidebar); border-right: 1px solid var(--border); padding: 15px; display: flex; flex-direction: column; gap: 10px; overflow: hidden; }
+        aside { background: var(--sidebar); border-right: 1px solid var(--border); padding: 15px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
         
-        .section-title { font-size: 0.65rem; color: #666; font-weight: 800; text-transform: uppercase; border-bottom: 1px solid #222; margin-bottom: 5px; }
+        .section-title { font-size: 0.65rem; color: #666; font-weight: 800; text-transform: uppercase; border-bottom: 1px solid #222; margin-bottom: 5px; padding-bottom: 2px; }
         
-        /* Status LEDs in der Sidebar */
         .status-row { display: flex; justify-content: space-between; padding: 5px 0; margin-bottom: 5px; }
         .led-item { display: flex; align-items: center; gap: 8px; font-size: 0.7rem; color: #888; }
         .led { width: 10px; height: 10px; border-radius: 50%; background: #333; transition: background 0.3s, box-shadow 0.3s; }
         .led.green { background: #4caf50; box-shadow: 0 0 8px #4caf50; }
         .led.red { background: #f44336; box-shadow: 0 0 8px #f44336; }
 
-        .nav-btn { width: 100%; padding: 10px; background: #222; border: 1px solid var(--border); color: var(--text); border-radius: 4px; cursor: pointer; text-align: left; font-size: 0.8rem; margin-bottom: 4px; }
+        .nav-btn { width: 100%; padding: 10px; background: #222; border: 1px solid var(--border); color: var(--text); border-radius: 4px; cursor: pointer; text-align: left; font-size: 0.8rem; margin-bottom: 4px; transition: 0.2s; }
+        .nav-btn:hover { background: #333; }
         .nav-btn.active { background: var(--accent); border-color: #555; }
 
-        select, input { width: 100%; background: #000; color: #fff; border: 1px solid var(--border); padding: 8px; border-radius: 4px; font-size: 0.8rem; margin-bottom: 5px; }
+        select, input { width: 100%; background: #000; color: #fff; border: 1px solid var(--border); padding: 8px; border-radius: 4px; font-size: 0.8rem; margin-bottom: 5px; outline: none; }
 
-        .sensor-card { background: #0a0a0a; padding: 10px; border-radius: 4px; border: 1px solid #222; }
-        .sensor-line { font-size: 0.85rem; margin: 4px 0; font-weight: 500; white-space: pre; }
+        .sensor-card { background: #0a0a0a; padding: 10px; border-radius: 4px; border: 1px solid #222; margin-top: 5px; }
+        .sensor-line { font-size: 0.85rem; margin: 4px 0; font-weight: 500; white-space: pre; font-family: monospace; }
 
-        #viewport { flex: 1; background: #000; display: flex; align-items: center; justify-content: center; position: relative; }
+        #viewport { flex: 1; background: #000; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
         #chart_view { display: none; width: 100%; height: 100%; padding: 25px; }
-        #video_feed { max-width: 100%; max-height: 100%; }
-        .save-btn { width: 100%; padding: 12px; background: #238636; color: white; border: none; font-weight: bold; cursor: pointer; border-radius: 4px; font-size: 0.8rem; }
+        #video_feed { max-width: 100%; max-height: 100%; object-fit: contain; }
+        
+        .save-btn { width: 100%; padding: 12px; background: #238636; color: white; border: none; font-weight: bold; cursor: pointer; border-radius: 4px; font-size: 0.8rem; margin-top: auto; }
+        .save-btn:hover { background: #2ea043; }
     </style>
 </head>
 <body>
@@ -71,6 +74,7 @@
                 <select id="inp_licht"><option value="R">Ring (R)</option><option value="C">Coax (C)</option><option value="S">Side (S)</option></select>
                 <select id="inp_pol"><option value="On">Pol: Ein</option><option value="Off">Pol: Aus</option></select>
             </div>
+            
             <div id="spec_opts" style="display:none;">
                 <select id="inp_spec_mode">
                     <option value="Abs">Absorption</option>
@@ -78,10 +82,10 @@
                     <option value="Scope">Scope</option>
                 </select>
             </div>
+
             <div id="clim_opts" style="display:none;">
                 <input type="number" id="inp_interval" value="1" min="1" placeholder="Intervall (Sek)">
             </div>
-            <button class="save-btn" onclick="saveData()">DATENSATZ SPEICHERN</button>
 
             <div class="section-title" id="sensor_title" style="display:none;">Echtzeit-Klima</div>
             <div class="sensor-card" id="sensor_box" style="display:none;">
@@ -91,12 +95,13 @@
                 <div class="sensor-line" id="disp_rh1">RH1:  --.- %</div>
                 <div class="sensor-line" id="disp_rh2">RH2:  --.- %</div>
             </div>
+
+            <button class="save-btn" onclick="saveData()">DATENSATZ SPEICHERN</button>
         </aside>
 
         <section id="viewport">
             <div id="video_wrap" style="width:100%; height:100%; display:flex; justify-content:center; align-items:center;">
-                <img id="video_feed" src="/video_feed">
-                <canvas id="overlay_canvas" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;"></canvas>
+                <img id="video_feed" src="/video_feed" alt="Live Video">
             </div>
             <div id="chart_view"><canvas id="climateChart"></canvas></div>
         </section>
@@ -113,7 +118,15 @@
                 { label: 'RH1', data: [], borderColor: '#a371f7', tension: 0.1, pointRadius: 0 },
                 { label: 'RH2', data: [], borderColor: '#734dbd', tension: 0.1, pointRadius: 0 }
             ]},
-            options: { responsive: true, maintainAspectRatio: false, scales: { x: { grid: { color: '#1a1a1a' } }, y: { grid: { color: '#1a1a1a' } } } }
+            options: { 
+                responsive: true, 
+                maintainAspectRatio: false, 
+                scales: { 
+                    x: { grid: { color: '#1a1a1a' }, ticks: { color: '#555' } }, 
+                    y: { grid: { color: '#1a1a1a' }, ticks: { color: '#555' } } 
+                },
+                plugins: { legend: { labels: { color: '#888', font: { size: 10 } } } }
+            }
         });
 
         const evtSource = new EventSource("/stream");
@@ -121,18 +134,19 @@
             const data = JSON.parse(e.data);
             if(data.type === 'climate_update') {
                 const v = data.payload.values;
-                // Zwei Leerzeichen für Präzision
+                
+                // PRÄZISION: Zwei Leerzeichen nach dem Doppelpunkt gemäß Vorgabe
                 document.getElementById('disp_gas').innerText = `Gas:  ${v.gas} ppm`;
-                document.getElementById('disp_t1').innerText = `T1:  ${v.t1.toFixed(1)} °C`;
-                document.getElementById('disp_t2').innerText = `T2:  ${v.t2.toFixed(1)} °C`;
-                document.getElementById('disp_rh1').innerText = `RH1:  ${v.rh1.toFixed(1)} %`;
-                document.getElementById('disp_rh2').innerText = `RH2:  ${v.rh2.toFixed(1)} %`;
+                document.getElementById('disp_t1').innerText = `T1:  ${parseFloat(v.t1).toFixed(1)} °C`;
+                document.getElementById('disp_t2').innerText = `T2:  ${parseFloat(v.t2).toFixed(1)} °C`;
+                document.getElementById('disp_rh1').innerText = `RH1:  ${parseFloat(v.rh1).toFixed(1)} %`;
+                document.getElementById('disp_rh2').innerText = `RH2:  ${parseFloat(v.rh2).toFixed(1)} %`;
                 
                 if(currentMode === 'clim') {
                     const time = new Date().toLocaleTimeString();
                     climateChart.data.labels.push(time);
                     [v.t1, v.t2, v.rh1, v.rh2].forEach((val, i) => climateChart.data.datasets[i].data.push(val));
-                    if(climateChart.data.labels.length > 20) {
+                    if(climateChart.data.labels.length > 30) {
                         climateChart.data.labels.shift();
                         climateChart.data.datasets.forEach(d => d.data.shift());
                     }
@@ -168,13 +182,24 @@
 
         function saveData() {
             const payload = {
-                mode: currentMode, typ: document.getElementById('inp_typ').value,
-                id: document.getElementById('inp_id').value, pos: document.getElementById('inp_pos').value,
-                licht: document.getElementById('inp_licht').value, pol: document.getElementById('inp_pol').value,
+                mode: currentMode, 
+                typ: document.getElementById('inp_typ').value,
+                id: document.getElementById('inp_id').value, 
+                pos: document.getElementById('inp_pos').value,
+                licht: document.getElementById('inp_licht').value, 
+                pol: document.getElementById('inp_pol').value,
                 spec_mode: document.getElementById('inp_spec_mode').value
             };
-            fetch('/api/save_data', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) })
-            .then(r => r.json()).then(d => alert("Gespeichert: " + d.file));
+            fetch('/api/save_data', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify(payload) 
+            })
+            .then(r => r.json())
+            .then(d => {
+                if(d.status === "success") alert("Gespeichert: " + d.file);
+                else alert("Fehler beim Speichern");
+            });
         }
     </script>
 </body>
