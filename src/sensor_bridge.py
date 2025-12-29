@@ -1,70 +1,75 @@
+### 3. Sensor Bridge (src/sensor_bridge.py)
+### Änderung:** Implementiert echte serielle Kommunikation mit Reconnect-Logik und Fehlerbehandlung für das TSV-Format.
+
+python
+import serial
 import time
 import threading
 import logging
-import os
-import csv
-import gc
-from datetime import datetime
-# Import der zentralen Instanzen
-from data_manager import DataManager
-from config import PATHS, REGEX_CLIMATE
 
-def read_hardware_sensors():
-    """
-    PLATZHALTER FÜR HARDWARE-ABFRAGE (I2C oder Arduino).
-    Hier implementierst du später den Aufruf für deinen Sensor (z.B. BME280 via I2C).
-    Aktuell liefert die Funktion Mock-Daten für den Systemtest.
-    """
-    # Beispielhafte Rückgabewerte (Hier käme deine smbus2 oder serial Logik rein)
-    temp = 24.5 
-    hum = 45.2
-    return temp, hum
+logger = logging.getLogger("SensorBridge")
 
-def sensor_bridge_loop():
+def sensor_loop(dm_instance, port='/dev/ttyACM0', baud=115200):
     """
-    Hauptschleife der Sensor-Bridge.
-    Läuft in einem eigenen Thread und pollt die Sensordaten alle 2 Sekunden.
+    Hintergrund-Thread für Arduino-Kommunikation.
+    Liest: T1 \t H1 \t T2 \t H2 \t Gas \t Status
     """
-    dm = DataManager()
-    logging.info("SENSOR-BRIDGE: Hardware-Polling gestartet (Intervall: 2s).")
+    ser = None
     
-    # Vorbereitung des Log-Pfads auf der NVMe SSD zur SD-Karten-Schonung.[2, 3]
-    log_dir = PATHS["climate"]
-    os.makedirs(log_dir, exist_ok=True)
+    while True:
+        try:
+            # Reconnect Logik
+            if ser is None or not ser.is_open:
+                try:
+                    ser = serial.Serial(port, baud, timeout=2)
+                    logger.info(f"Arduino verbunden an {port}")
+                    time.sleep(2) # Wait for Arduino Reset
+                except serial.SerialException:
+                    dm_instance.set_led("clim", "red")
+                    time.sleep(3) # Retry delay
+                    continue
 
-    try:
-        while True:
-            # 1. Daten von der Hardware lesen
-            temp, hum = read_hardware_sensors()
-            
-            # 2. DataManager (Singleton) aktualisieren
-            # Durch den Thread-Lock im DataManager ist dieser Zugriff sicher.
-            dm.update_sensors(temp, hum)
-            
-            # 3. Environment Logging (AP 2): Speichern in CSV
-            # Naming Scheme: LOG-Zeitraum_Bezeichnung_Ortsangabe_ID_EXT
-            datestamp = datetime.now().strftime("%Y%m%d")
-            log_filename = f"LOG-{datestamp}-{datestamp}_Umwelt_Labor_01.csv"
-            log_path = os.path.join(log_dir, log_filename)
-            
-            # Wir hängen die Daten an die CSV an (Append Mode)
-            with open(log_path, mode='a', newline='') as f:
-                writer = csv.writer(f)
-                writer.writerow([datetime.now().isoformat(), temp, hum])
+            if ser.in_waiting > 0:
+                line = ser.readline().decode('utf-8', errors='ignore').strip()
+                
+                # Ignoriere Debug-Nachrichten (alles was nicht Tab-getrennt ist)
+                if '\t' not in line:
+                    continue
 
-            # 4. Memory-Hygiene für 24/7 Betrieb.
-            # Da wir kontinuierlich schreiben, triggern wir gelegentlich den GC,
-            # um den Unified Memory des Jetsons sauber zu halten.
-            if int(time.time()) % 60 == 0: # Alle 60 Sekunden
-                gc.collect()
-
-            # 5. Intervall einhalten
-            time.sleep(2)
-            
-    except Exception as e:
-        logging.error(f"SENSOR-BRIDGE CRASH: {e}")
-
-def start_sensor_bridge():
-    """Startet die Bridge in einem Daemon-Thread."""
-    bridge_thread = threading.Thread(target=sensor_bridge_loop, daemon=True)
-    bridge_thread.start()
+                parts = line.split('\t')
+                
+                # Wir erwarten 6 Werte
+                if len(parts) >= 6:
+                    try:
+                        data = {
+                            't1': float(parts),
+                            'rh1': float(parts[1]),
+                            't2': float(parts[2]),
+                            'rh2': float(parts[3]),
+                            'gas': int(parts[4]),
+                            'status': parts[5] # "Normal" oder "ALARM"
+                        }
+                        
+                        # Update Singleton
+                        dm_instance.update_sensors(
+                            data['t1'], data['t2'], 
+                            data['rh1'], data['rh2'], 
+                            data['gas']
+                        )
+                        
+                        # Status LED Logik
+                        if "ALARM" in data['status']:
+                            dm_instance.set_led("clim", "blink")
+                        else:
+                            dm_instance.set_led("clim", "green")
+                            
+                    except ValueError:
+                        pass # Parsing Fehler ignorieren
+                        
+        except Exception as e:
+            logger.error(f"Serial Error: {e}")
+            if ser:
+                ser.close()
+            ser = None
+            dm_instance.set_led("clim", "red")
+            time.sleep(1)

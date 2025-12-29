@@ -1,66 +1,76 @@
+### 1. Die neue Video-Engine (src/camera_engine.py)
+## Änderung:** Ersetzt `nvarguscamerasrc` (CSI) durch `v4l2src` (USB) mit MJPEG-Hardware-Decoding. Dies löst das Latenz-Problem.
+
+python
 import cv2
-import subprocess
 import time
-from config import DIRS
+import logging
+import subprocess
+
+# Logging konfigurieren
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("CameraEngine")
 
 class CameraEngine:
     def __init__(self):
         self.cap = None
-        self.is_recording = False
-        self.pipeline_process = None
+        # Auflösung für Dino-Lite (MJPEG High Speed)
+        # 1280x960 ist oft der Sweetspot für 30FPS bei Dino-Lite Edge Modellen
+        self.width = 1280
+        self.height = 960
+        self.fps = 30
 
     def get_gstreamer_pipeline(self):
-        # Orin Nano Pipeline: 
-        # ISP -> NVMM -> Resize -> CPU Memory -> Appsink
+        """
+        Erstellt die optimierte Pipeline für Jetson Orin Nano + USB Mikroskop.
+        Nutzung von nvv4l2decoder (mjpeg=1) entlastet die CPU massiv.
+        """
         return (
-            "nvarguscamerasrc! "
-            "video/x-raw(memory:NVMM), width=(int)1920, height=(int)1080, format=(string)NV12, framerate=(fraction)30/1! "
-            "nvvidconv! "
-            "video/x-raw, width=(int)960, height=(int)540, format=(string)BGRx! "
-            "videoconvert! "
-            "video/x-raw, format=(string)BGR! "
-            "appsink"
+            f"v4l2src device=/dev/video0! "
+            f"image/jpeg, width=(int){self.width}, height=(int){self.height}, framerate=(fraction){self.fps}/1! "
+            f"nvv4l2decoder mjpeg=1! "
+            f"nvvidconv! "
+            f"video/x-raw, format=(string)BGRx! "
+            f"videoconvert! "
+            f"video/x-raw, format=(string)BGR! "
+            f"appsink drop=1 max-buffers=1"
         )
 
     def start_stream(self):
-        if self.cap is None:
-            self.cap = cv2.VideoCapture(self.get_gstreamer_pipeline(), cv2.CAP_GSTREAMER)
+        """Startet den Video-Capture Prozess."""
+        if self.cap is not None and self.cap.isOpened():
+            return
+
+        pipeline = self.get_gstreamer_pipeline()
+        logger.info(f"Starte Pipeline: {pipeline}")
+        
+        self.cap = cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER)
+        
+        if not self.cap.isOpened():
+            logger.error("Fehler: Konnte Videoquelle nicht öffnen. Ist das Mikroskop an USB0?")
+            # Fallback für Debugging (ohne GStreamer, langsam aber bildgebend)
+            self.cap = cv2.VideoCapture(0)
 
     def get_frame(self):
+        """Liefert den aktuellen Frame als JPEG-Bytes für den Webstream."""
         if self.cap and self.cap.isOpened():
             ret, frame = self.cap.read()
             if ret:
-                # Encode als JPEG für Web-Stream (Software Encoding, aber kleine Auflösung ok)
-                ret, buffer = cv2.imencode('.jpg', frame)
+                # Encoding für Web-Transfer (Quality 80 spart Bandbreite)
+                ret, buffer = cv2.imencode('.jpg', frame,)
                 return buffer.tobytes()
         return None
 
     def take_snapshot(self, filepath):
+        """Speichert ein Standbild in voller Qualität."""
         if self.cap and self.cap.isOpened():
             ret, frame = self.cap.read()
             if ret:
-                # Speichern in voller Auflösung (hier skaliert durch Pipeline, 
-                # für Full-Res müsste man eine separate Pipeline starten oder Snapshot-Mode nutzen)
                 cv2.imwrite(filepath, frame)
+                logger.info(f"Snapshot gespeichert: {filepath}")
                 return True
         return False
 
-    def start_recording(self, filename):
-        """Startet separate GStreamer-Instanz für Recording (High Res)"""
-        path = f"{DIRS}/{filename}.mp4"
-        # CPU Encoding mit ultrafast Preset für Orin Nano
-        cmd = (
-            f"gst-launch-1.0 -e nvarguscamerasrc! "
-            f"video/x-raw(memory:NVMM), width=1920, height=1080, framerate=30/1! "
-            f"nvvidconv! video/x-raw, format=I420! "
-            f"x264enc speed-preset=ultrafast bitrate=8000! "
-            f"mp4mux! filesink location={path}"
-        )
-        self.pipeline_process = subprocess.Popen(cmd.split())
-        self.is_recording = True
-
-    def stop_recording(self):
-        if self.pipeline_process:
-            self.pipeline_process.send_signal(subprocess.signal.SIGINT) # Sende EOS
-            self.pipeline_process = None
-            self.is_recording = False
+    def release(self):
+        if self.cap:
+            self.cap.release()
