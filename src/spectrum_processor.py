@@ -1,73 +1,75 @@
 import os
 import pandas as pd
 import matplotlib
-# Wir erzwingen das Agg-Backend, um keine GUI-Ressourcen auf dem Jetson zu verschwenden
+# 1. Agg-Backend erzwingen, um GUI-Ressourcen auf dem Jetson zu sparen
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import io
 import base64
 import gc
 import logging
+import re
 
 class SpectrumProcessor:
-    """
-    Spezialisierter Dienst zum Parsen und Visualisieren von Stellarnet-Spektren.
-    Unterstützt.abs (Absorbance),.trm/.trans (Transmission) und.ssm/.scope (Scope).[1]
-    """
-
     @staticmethod
     def parse_file(filepath):
-        """
-        Liest die ASCII-Daten der Stellarnet-Datei ein.
-        Diese Dateien sind in der Regel Text-basiert und enthalten Wavelength vs. Intensity.[2, 3]
-        """
+        """Liest Stellarnet ASCII-Daten ein und bereitet sie für die Analyse vor."""
         try:
-            # Wir überspringen potenzielle Header-Zeilen (typisch 2-4 Zeilen bei SpectraWiz)
-            # und nutzen flexible Delimiter (Tab oder Leerzeichen) [2]
-            data = pd.read_csv(filepath, sep=r'\s+', skiprows=2, names=['wavelength', 'value'], decimal='.')
+            # 1. Datei mit latin-1 öffnen, um Encoding-Fehler (z.B. bei 'ü') zu vermeiden
+            with open(filepath, 'r', encoding='latin-1') as f:
+                lines = f.readlines()
+
+            # 2. Dynamisches Header-Skipping: Suche nach der ersten Zeile mit zwei Zahlenwerten
+            start_line = 0
+            for i, line in enumerate(lines):
+                if re.match(r'^\s*\d+\.?\d*\s+\d+\.?\d*', line):
+                    start_line = i
+                    break
             
-            # Validierung: Haben wir gültige numerische Daten erhalten?
-            if data.empty or data['wavelength'].isnull().all():
-                raise ValueError("Datei enthält keine gültigen Spektraldaten.")
-                
+            # 3. Daten ab Datenpunkt via Pandas einlesen (flexible Whitespace-Trennung)
+            data = pd.read_csv(
+                io.StringIO("".join(lines[start_line:])), 
+                sep=r'\s+', 
+                names=['wavelength', 'value'], 
+                decimal='.'
+            )
+            
+            # 4. Rückgabe des DataFrames bei erfolgreicher Validierung
+            if data.empty:
+                raise ValueError("Keine gültigen Spektraldaten extrahiert.")
             return data
+            
         except Exception as e:
             logging.error(f"PARSER-FEHLER bei {os.path.basename(filepath)}: {e}")
             return None
 
     @staticmethod
     def plot_to_base64(df, title="Spektralanalyse"):
-        """
-        Erzeugt einen Plot und gibt ihn als Base64-String für das Flask-Frontend zurück.
-        Implementiert strikte Memory-Hygiene für den 24/7-Betrieb.[4, 5]
-        """
+        """Erzeugt eine Base64-Grafik unter Berücksichtigung der NumPy 1.26.4 ABI-Beschränkungen."""
         if df is None: return ""
-
         try:
-            # Erstellung der Figure ohne GUI-Fenster
+            # 1. Konvertierung: Series explizit in NumPy-Arrays umwandeln (Fix für Multi-dimensional indexing Error)
+            x_data = df['wavelength'].to_numpy()
+            y_data = df['value'].to_numpy()
+
+            # 2. Plot-Vorbereitung: Erstellung der Figure im Dark-Dashboard Style
             plt.figure(figsize=(8, 4))
-            plt.plot(df['wavelength'].values, df['value'].values, color='cyan', linewidth=1.5)
-            plt.title(title, color='white')
-            plt.xlabel("Wellenlänge (nm)", color='gray')
-            plt.ylabel("Intensität", color='gray')
-            plt.grid(True, linestyle='--', alpha=0.3)
+            plt.plot(x_data, y_data, color='cyan', linewidth=1.5)
             
-            # Styling für das dunkle Dashboard
+            # 3. Styling: Hintergrund und Gitter an das Hazion-Design anpassen
             plt.gcf().set_facecolor('#1a1a1a')
             plt.gca().set_facecolor('#1a1a1a')
             plt.tick_params(colors='gray')
-
-            # Plot in einen Buffer speichern, statt auf die SSD (schont die NVMe)
+            plt.title(title, color='white')
+            plt.grid(True, linestyle='--', alpha=0.3)
+            
+            # 4. Export: Speichern in BytesIO-Buffer zur Schonung der NVMe SSD
             buf = io.BytesIO()
             plt.savefig(buf, format='png', facecolor='#1a1a1a')
             buf.seek(0)
-            img_base64 = base64.b64encode(buf.read()).decode('utf-8')
-            buf.close()
+            return base64.b64encode(buf.read()).decode('utf-8')
             
-            return img_base64
-
         finally:
-            # KRITISCH: Memory-Hygiene für den Jetson Orin Nano
-            # Wir schließen alle Plots und triggern den Garbage Collector manuell.[5, 6]
+            # 5. RAM-Hygiene: Explizites Schließen des Plots und Trigger des GC (Wichtig für 8GB Unified Memory)
             plt.close('all')
             gc.collect()
