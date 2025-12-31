@@ -46,7 +46,7 @@ class SpectrumProcessor:
         try:
             # Erstellung der Figure ohne GUI-Fenster
             plt.figure(figsize=(8, 4))
-            plt.plot(df['wavelength'], df['value'], color='cyan', linewidth=1.5)
+            plt.plot(df['wavelength'].values, df['value'].values, color='cyan', linewidth=1.5)
             plt.title(title, color='white')
             plt.xlabel("Wellenlänge (nm)", color='gray')
             plt.ylabel("Intensität", color='gray')

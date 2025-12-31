@@ -24,7 +24,7 @@ BAUD_RATE = 115200
 # GStreamer Pipeline für Dino-Lite AM7815MZT
 # Spezialisierte Pipeline für Dino-Lite AM7815MZT
 GST_PIPELINE = (
-    "v4l2src device=/dev/video0 ! "
+    "v4l2src device=/dev/video1 ! "
     "image/jpeg, width=1280, height=720, framerate=30/1 ! "
     "jpegdec ! videoconvert ! video/x-raw, format=BGR ! appsink drop=true"
 )
