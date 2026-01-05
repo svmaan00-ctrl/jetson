@@ -175,27 +175,31 @@ def save_data():
     id_val = data.get('id', 'ID').replace(" ", "_")
     pos = data.get('pos', 'POS').replace(" ", "_")
 
-    # --- NAMING SCHEME IMPLEMENTATION ---
     if mode == 'micro':
-        # YYYYMMDD_HHMMSS_TYP_ID_POS_Licht_Pol_EXT
         fn = f"{ts}_{typ}_{id_val}_{pos}_{data['licht']}_{data['pol']}.jpg"
         path = os.path.join(DIRS['SNAPSHOTS'], fn)
-        if cam.take_snapshot(path): return jsonify({"status": "success", "file": fn})
+        if cam.take_snapshot(path): 
+            return jsonify({"status": "success", "file": fn})
             
     elif mode == 'spec':
-        # YYYYMMDD_HHMMSS_TYP_ID_POS_Modus_EXT
+        # Naming Scheme: YYYYMMDD_HHMMSS_TYP_ID_POS_Modus.abs
         fn = f"{ts}_{typ}_{id_val}_{pos}_{data['spec_mode']}.abs"
-        # Hier Ingest-Logik einfügen (Verschieben aus Drop-Zone)
-        return jsonify({"status": "success", "file": fn})
+        # Wir geben 'pending' zurück, da der Watchdog im DataManager 
+        # die Datei verarbeitet, sobald sie im Ordner landet.
+        return jsonify({
+            "status": "pending", 
+            "info": "Warte auf Ingest durch Watchdog",
+            "expected_file": fn
+        })
 
     elif mode == 'clim':
-        # LOG-Zeitraum_Bezeichnung_Ortsangabe_ID_EXT
+        # LOG-Zeitraum_Bezeichnung_Ortsangabe_ID.csv
         fn = f"LOG-{ts}_{typ}_{pos}_{id_val}.csv"
         path = os.path.join(DIRS['CLIMATE'], fn)
-        # Logik zum Schreiben der CSV...
+        # Hier käme deine CSV-Schreiblogik hin
         return jsonify({"status": "success", "file": fn})
 
-    return jsonify({"status": "error"}), 400
+    return jsonify({"status": "error", "message": "Unbekannter Modus"}), 400
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, threaded=True)

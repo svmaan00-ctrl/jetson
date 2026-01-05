@@ -6,61 +6,97 @@
     <title>Hazion Lab System v2</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        :root {
-            --bg: #0d0d0d; --sidebar: #161616; --border: #2a2a2a;
-            --text: #e0e0e0; --accent: #444; --graph-blue: #3894ff; --graph-violet: #a371f7;
-        }
-        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        body { background-color: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-        
-        header { height: 50px; background: #111; border-bottom: 1px solid var(--border); display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 0 20px; }
-        .brand { grid-column: 2; font-size: 1.2rem; font-weight: 700; letter-spacing: 1px; color: #fff; }
+    :root {
+        --bg: #0d0d0d; --sidebar: #161616; --border: #2a2a2a;
+        --text: #e0e0e0; --accent: #444; --graph-blue: #3894ff; --graph-violet: #a371f7;
+    }
+    * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    body { background-color: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+    
+    header { height: 50px; background: #111; border-bottom: 1px solid var(--border); display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 0 20px; }
+    .brand { grid-column: 2; font-size: 1.2rem; font-weight: 700; letter-spacing: 1px; color: #fff; }
 
-        main { display: grid; grid-template-columns: 290px 1fr; flex: 1; overflow: hidden; }
-        aside { background: var(--sidebar); border-right: 1px solid var(--border); padding: 15px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
-        
-        .section-title { font-size: 0.65rem; color: #666; font-weight: 800; text-transform: uppercase; border-bottom: 1px solid #222; margin-bottom: 5px; padding-bottom: 2px; }
-        
-        .status-row { display: flex; justify-content: space-between; padding: 5px 0; margin-bottom: 5px; }
-        .led-item { display: flex; align-items: center; gap: 8px; font-size: 0.7rem; color: #888; }
-        .led { width: 10px; height: 10px; border-radius: 50%; background: #333; transition: background 0.3s, box-shadow 0.3s; }
-        .led.green { background: #4caf50; box-shadow: 0 0 8px #4caf50; }
-        .led.red { background: #f44336; box-shadow: 0 0 8px #f44336; }
+    main { display: grid; grid-template-columns: 290px 1fr; flex: 1; overflow: hidden; }
+    
+    /* HIER IST DER FIX FÜR ASIDE (Überschreibt dein altes aside) */
+    aside { 
+        background: var(--sidebar); 
+        border-right: 1px solid var(--border); 
+        padding: 15px; 
+        display: flex; 
+        flex-direction: column; 
+        gap: 10px; 
+        height: 100%; 
+        overflow-x: hidden; 
+        overflow-y: auto; 
+    }
+    
+    .section-title { font-size: 0.65rem; color: #666; font-weight: 800; text-transform: uppercase; border-bottom: 1px solid #222; margin-bottom: 5px; padding-bottom: 2px; }
+    
+    .status-row { display: flex; justify-content: space-between; padding: 5px 0; margin-bottom: 5px; }
+    .led-item { display: flex; align-items: center; gap: 8px; font-size: 0.7rem; color: #888; }
+    .led { width: 10px; height: 10px; border-radius: 50%; background: #333; transition: background 0.3s, box-shadow 0.3s; }
+    .led.green { background: #4caf50; box-shadow: 0 0 8px #4caf50; }
+    .led.red { background: #f44336; box-shadow: 0 0 8px #f44336; }
+    /* FIX: Orange LED hinzufügen */
+    .led.orange { background: #ff9800; box-shadow: 0 0 8px #ff9800; }
 
-        .nav-btn { width: 100%; padding: 10px; background: #222; border: 1px solid var(--border); color: var(--text); border-radius: 4px; cursor: pointer; text-align: left; font-size: 0.8rem; margin-bottom: 4px; transition: 0.2s; }
-        .nav-btn:hover { background: #333; }
-        .nav-btn.active { background: var(--accent); border-color: #555; }
+    .nav-btn { width: 100%; padding: 10px; background: #222; border: 1px solid var(--border); color: var(--text); border-radius: 4px; cursor: pointer; text-align: left; font-size: 0.8rem; margin-bottom: 4px; transition: 0.2s; }
+    .nav-btn:hover { background: #333; }
+    .nav-btn.active { background: var(--accent); border-color: #555; }
 
-        select, input { width: 100%; background: #000; color: #fff; border: 1px solid var(--border); padding: 8px; border-radius: 4px; font-size: 0.8rem; margin-bottom: 5px; outline: none; }
+    select, input { width: 100%; background: #000; color: #fff; border: 1px solid var(--border); padding: 8px; border-radius: 4px; font-size: 0.8rem; margin-bottom: 5px; outline: none; }
 
-        .sensor-card { background: #0a0a0a; padding: 10px; border-radius: 4px; border: 1px solid #222; margin-top: 5px; }
-        .sensor-line { font-size: 0.85rem; margin: 4px 0; font-weight: 500; white-space: pre; font-family: monospace; }
+    .sensor-card { background: #0a0a0a; padding: 10px; border-radius: 4px; border: 1px solid #222; margin-top: 5px; }
+    .sensor-line { font-size: 0.85rem; margin: 4px 0; font-weight: 500; white-space: pre; font-family: monospace; color: #00ff88; }
 
-        #viewport { flex: 1; background: #000; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
-        #chart_view { display: none; width: 100%; height: 100%; padding: 25px; }
-        #video_feed { max-width: 100%; max-height: 100%; object-fit: contain; }
-        
-        .save-btn { width: 100%; padding: 12px; background: #238636; color: white; border: none; font-weight: bold; cursor: pointer; border-radius: 4px; font-size: 0.8rem; margin-top: auto; }
-        .save-btn:hover { background: #2ea043; }
-    </style>
+    #viewport { flex: 1; background: #000; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
+
+    /* HIER SIND DIE FIXES FÜR DIE GRAPHEN-CONTAINER */
+    #spectrum_wrap { 
+        display: none; 
+        width: 100%; 
+        height: 100%; 
+        flex-direction: column; 
+        padding: 20px; 
+        gap: 15px; 
+        background: #000; 
+    }
+    .chart-wrapper { 
+        flex: 1; 
+        min-height: 0; 
+        position: relative; 
+        border: 1px solid #222; 
+        border-radius: 4px; 
+        padding: 10px; 
+    }
+
+    #chart_view { display: none; width: 100%; height: 100%; padding: 25px; }
+    #video_feed { max-width: 100%; max-height: 100%; object-fit: contain; }
+    
+    .save-btn { width: 100%; padding: 12px; background: #238636; color: white; border: none; font-weight: bold; cursor: pointer; border-radius: 4px; font-size: 0.8rem; margin-top: auto; }
+    .save-btn:hover { background: #2ea043; }
+</style>
 </head>
 <body>
     <header><div class="brand">Hazion Lab System</div></header>
-    <main>
-        <aside>
-            <div class="section-title">System Status</div>
-            <div class="status-row">
+    
+    <main style="display: flex; height: calc(100vh - 50px); overflow: hidden;">
+        <aside style="width: 280px; flex-shrink: 0; display: flex; flex-direction: column; padding: 15px; border-right: 1px solid #444; overflow-y: auto;">
+            
+            <div class="section-title" style="text-align: center;">System Status</div>
+            <div class="status-row" style="display: flex; justify-content: center; gap: 10px; margin-bottom: 20px;">
                 <div class="led-item"><div id="led_micro" class="led"></div> MIK</div>
                 <div class="led-item"><div id="led_spec" class="led"></div> SPEK</div>
                 <div class="led-item"><div id="led_clim" class="led"></div> KLIM</div>
             </div>
 
-            <div class="section-title">Betriebsmodus</div>
+            <div class="section-title" style="text-align: center;">Betriebsmodus</div>
             <button class="nav-btn active" id="btn_micro" onclick="setMode('micro')">Mikroskopie</button>
             <button class="nav-btn" id="btn_spec" onclick="setMode('spec')">Spektrometrie</button>
             <button class="nav-btn" id="btn_clim" onclick="setMode('clim')">Klimaüberwachung</button>
 
-            <div class="section-title">Konfiguration</div>
+            <div class="section-title" style="text-align: center;">Konfiguration</div>
             <select id="inp_typ">
                 <option value="B">Bohrprobe (B)</option>
                 <option value="W">Wischprobe (W)</option>
@@ -87,8 +123,8 @@
                 <input type="number" id="inp_interval" value="1" min="1" placeholder="Intervall (Sek)">
             </div>
 
-            <div class="section-title" id="sensor_title" style="display:none;">Echtzeit-Klima</div>
-            <div class="sensor-card" id="sensor_box" style="display:none;">
+            <div class="section-title" id="sensor_title">Echtzeit-Klima</div>
+            <div class="sensor-card" id="sensor_box">
                 <div class="sensor-line" id="disp_gas">Gas:  --- ppm</div>
                 <div class="sensor-line" id="disp_t1">T1:  --.- °C</div>
                 <div class="sensor-line" id="disp_t2">T2:  --.- °C</div>
@@ -96,154 +132,167 @@
                 <div class="sensor-line" id="disp_rh2">RH2:  --.- %</div>
             </div>
 
-            <button class="save-btn" onclick="saveData()">DATENSATZ SPEICHERN</button>
+            <button class="save-btn" onclick="saveData()" style="margin-top: auto;">DATENSATZ SPEICHERN</button>
         </aside>
 
-        <section id="viewport">
-        <div id="video_wrap" style="width:100%; height:100%; display:flex; justify-content:center; align-items:center;">
-        <img id="video_feed" src="/video_feed">
-        <canvas id="overlay_canvas" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;"></canvas>
-         </div>
+        <section id="viewport" style="flex: 1; position: relative; background: #000; overflow: hidden;">
+            
+            <div id="video_wrap" style="width:100%; height:100%; display:flex; justify-content:center; align-items:center;">
+                <img id="video_feed" src="/video_feed" style="max-width: 100%; max-height: 100%; object-fit: contain;">
+                
+                <div id="scale_overlay" style="position: absolute; bottom: 20px; right: 20px; width: 100px; pointer-events: none;">
+                    <div style="text-align: center; color: white; font-size: 12px; margin-bottom: 2px;">1mm</div>
+                    <div style="height: 2px; background: white; width: 100%;"></div>
+                </div>
+            </div>
     
-        <div id="spectrum_wrap" style="display:none; width:100%; height:100%; justify-content:center; align-items:center; background:#111;">
-        <img id="spectrum_plot" style="max-width:95%; max-height:90%; border:1px solid #333;">
-         </div>
+            <div id="spectrum_wrap" style="display:none; width:100%; height:100%; flex-direction: column; padding: 20px; box-sizing: border-box;">
+                <div class="chart-wrapper" style="flex: 1; min-height: 0;"><canvas id="rawChart"></canvas></div>
+                <div class="chart-wrapper" style="flex: 1; min-height: 0;"><canvas id="snvChart"></canvas></div>
+            </div>
 
-        <div id="chart_view" style="display:none; width:100%; height:100%; padding:20px;">
-        <canvas id="climateChart"></canvas>
-    </div>
-</section>
+            <div id="chart_view" style="display:none; width:100%; height:100%; padding: 20px; box-sizing: border-box;">
+                <canvas id="climateChart"></canvas>
+            </div>
+        </section>
     </main>
 
- <script>
-    // --- 1. Globale Variablen (Nur einmal deklarieren) ---
-    let currentMode = 'micro';
-    const chartCtx = document.getElementById('climateChart').getContext('2d');
-    
-    // Initialisierung des Klima-Charts
-    const climateChart = new Chart(chartCtx, {
-        type: 'line',
-        data: { 
-            labels: [], 
-            datasets: [
-                { label: 'T1', data: [], borderColor: '#3894ff', tension: 0.1, pointRadius: 0 },
-                { label: 'T2', data: [], borderColor: '#265fa3', tension: 0.1, pointRadius: 0 },
-                { label: 'RH1', data: [], borderColor: '#a371f7', tension: 0.1, pointRadius: 0 },
-                { label: 'RH2', data: [], borderColor: '#734dbd', tension: 0.1, pointRadius: 0 }
-            ]
-        },
-        options: { 
-            responsive: true, 
-            maintainAspectRatio: false, 
-            scales: { 
-                x: { grid: { color: '#1a1a1a' }, ticks: { color: '#555' } }, 
-                y: { grid: { color: '#1a1a1a' }, ticks: { color: '#555' } } 
-            },
-            plugins: { legend: { labels: { color: '#888', font: { size: 10 } } } }
-        }
-    });
+<script>
+    // --- 1. GLOBALE VARIABLEN & CHARTS ---
+    window.currentMode = 'micro';
 
-    // --- 2. SSE Verbindung (Echtzeit-Daten) ---
+    // Klima-Chart Initialisierung
+    const chartCtx = document.getElementById('climateChart');
+    if (chartCtx) {
+        window.climateChart = new Chart(chartCtx.getContext('2d'), {
+            type: 'line',
+            data: { 
+                labels: [], 
+                datasets: [
+                    { label: 'T1', data: [], borderColor: '#3894ff', tension: 0.1, pointRadius: 0 },
+                    { label: 'T2', data: [], borderColor: '#265fa3', tension: 0.1, pointRadius: 0 },
+                    { label: 'RH1', data: [], borderColor: '#a371f7', tension: 0.1, pointRadius: 0 },
+                    { label: 'RH2', data: [], borderColor: '#734dbd', tension: 0.1, pointRadius: 0 }
+                ]
+            },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+    }
+
+    // Hilfsfunktion für Spektrometer-Charts (2048 Pixel Auflösung)
+    const setupSpecChart = (id, label, color, yTitle) => {
+        const el = document.getElementById(id);
+        if (!el) return null;
+        return new Chart(el.getContext('2d'), {
+            type: 'line',
+            data: { 
+                labels: Array.from({length: 2048}, (_, i) => i), 
+                datasets: [{ label: label, data: [], borderColor: color, borderWidth: 1.5, pointRadius: 0 }] 
+            },
+            options: { 
+                responsive: true, 
+                maintainAspectRatio: false,
+                scales: { y: { title: { display: true, text: yTitle, color: '#666' } } }
+            }
+        });
+    };
+
+    window.rawChart = setupSpecChart('rawChart', 'Rohdaten (Counts)', '#ffcc00', 'Intensität');
+    window.snvChart = setupSpecChart('snvChart', 'SNV (KI-Ready)', '#00ff88', 'z-Score');
+
+    // --- 2. SSE DATEN-STREAM ---
     const evtSource = new EventSource("/stream");
 
     evtSource.onmessage = (e) => {
-        const data = JSON.parse(e.data);
+        try {
+            const data = JSON.parse(e.data);
 
-        // A. Klima-Updates verarbeiten
-        if(data.type === 'climate_update') {
-            const v = data.payload.values;
-            // Aktualisierung der Anzeige in der Sidebar
-            document.getElementById('disp_gas').innerText = `Gas:  ${v.gas} ppm`;
-            document.getElementById('disp_t1').innerText = `T1:  ${v.t1.toFixed(1)} °C`;
-            document.getElementById('disp_t2').innerText = `T2:  ${v.t2.toFixed(1)} °C`;
-            document.getElementById('disp_rh1').innerText = `RH1:  ${v.rh1.toFixed(1)} %`;
-            document.getElementById('disp_rh2').innerText = `RH2:  ${v.rh2.toFixed(1)} %`;
-            
-            if(currentMode === 'clim') {
-                const time = new Date().toLocaleTimeString();
-                climateChart.data.labels.push(time);
-                [v.t1, v.t2, v.rh1, v.rh2].forEach((val, i) => climateChart.data.datasets[i].data.push(val));
-                if(climateChart.data.labels.length > 20) {
-                    climateChart.data.labels.shift();
-                    climateChart.data.datasets.forEach(d => d.data.shift());
+            if (data.type === 'climate_update') {
+                const v = data.payload.values;
+                
+                // UI-PRÄZISION: Zwei Leerzeichen nach Doppelpunkt (Vorgabe erfüllt)
+                if(document.getElementById('disp_gas')) document.getElementById('disp_gas').innerText = "Gas:  " + v.gas + " ppm";
+                if(document.getElementById('disp_t1'))  document.getElementById('disp_t1').innerText  = "T1:  " + v.t1.toFixed(1) + " °C";
+                if(document.getElementById('disp_t2'))  document.getElementById('disp_t2').innerText  = "T2:  " + v.t2.toFixed(1) + " °C";
+                if(document.getElementById('disp_rh1')) document.getElementById('disp_rh1').innerText = "RH1:  " + v.rh1.toFixed(1) + " %";
+                if(document.getElementById('disp_rh2')) document.getElementById('disp_rh2').innerText = "RH2:  " + v.rh2.toFixed(1) + " %";
+                
+                // Echtzeit-Graph Update
+                if (window.climateChart) {
+                    const time = new Date().toLocaleTimeString();
+                    window.climateChart.data.labels.push(time);
+                    window.climateChart.data.datasets[0].data.push(v.t1);
+                    window.climateChart.data.datasets[1].data.push(v.t2);
+                    window.climateChart.data.datasets[2].data.push(v.rh1);
+                    window.climateChart.data.datasets[3].data.push(v.rh2);
+
+                    if (window.climateChart.data.labels.length > 30) {
+                        window.climateChart.data.labels.shift();
+                        window.climateChart.data.datasets.forEach(d => d.data.shift());
+                    }
+                    window.climateChart.update('none');
                 }
-                climateChart.update('none');
+                updateLeds(data.payload.leds);
             }
-            updateLeds(data.payload.leds);
-        }
 
-        // B. Spektrum-Update
-        if(data.type === 'spectrum_update') {
-            const plotImg = document.getElementById('spectrum_plot');
-            if(plotImg && data.payload.image) {
-                plotImg.src = "data:image/png;base64," + data.payload.image;
+            // KI-PIPELINE: Spektren-Update
+            if (data.type === 'new_spectrum_data') {
+                if (window.rawChart && window.snvChart) {
+                    window.rawChart.data.datasets[0].data = data.payload.raw;
+                    window.snvChart.data.datasets[0].data = data.payload.snv;
+                    window.rawChart.update('none');
+                    window.snvChart.update('none');
+                }
             }
-            
-            if(currentMode !== 'spec') {
-                console.log("Neues Spektrum empfangen");
-            }
-        }
-
-        // C. Manuelle LED-Updates
-        if(data.type === 'led_update') {
-            updateLeds(data.payload);
-        }
+        } catch (err) { console.error("Stream-Error:", err); }
     };
 
-    // --- 3. UI Steuerung ---
+    // --- 3. UI-STEUERUNG ---
     function setMode(mode) {
-        currentMode = mode;
+        window.currentMode = mode;
         
-        // Button-Styling
+        // Button-Highlighting
         document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-        document.getElementById('btn_' + mode).classList.add('active');
+        const activeBtn = document.getElementById('btn_' + mode);
+        if (activeBtn) activeBtn.classList.add('active');
         
-        // Viewport-Sichtbarkeit
+        // Viewport-Sichtbarkeit umschalten
         document.getElementById('video_wrap').style.display = (mode === 'micro') ? 'flex' : 'none';
         document.getElementById('spectrum_wrap').style.display = (mode === 'spec') ? 'flex' : 'none';
         document.getElementById('chart_view').style.display = (mode === 'clim') ? 'block' : 'none';
         
-        // Sidebar Widgets
-        const isClim = (mode === 'clim');
-        document.getElementById('sensor_box').style.display = isClim ? 'block' : 'none';
-        document.getElementById('sensor_title').style.display = isClim ? 'block' : 'none';
-        
-        // Optionen-Panels
+        // Sidebar-Optionen umschalten
         document.getElementById('micro_opts').style.display = (mode === 'micro') ? 'block' : 'none';
         document.getElementById('spec_opts').style.display = (mode === 'spec') ? 'block' : 'none';
         document.getElementById('clim_opts').style.display = (mode === 'clim') ? 'block' : 'none';
+
+        // Graphen-Refresh (Verhindert Darstellungsfehler beim Modus-Wechsel)
+        if (mode === 'spec') { window.rawChart?.resize(); window.snvChart?.resize(); }
+        if (mode === 'clim') { window.climateChart?.resize(); }
     }
 
-    function updateLeds(leds) {
-        ['micro', 'spec', 'clim'].forEach(sys => {
-            const el = document.getElementById('led_' + sys);
-            if(el && leds[sys]) {
-                el.className = 'led ' + leds[sys];
-            }
-        });
-    }
-
+    // --- 4. DATA LOGGING (POST-Request) ---
     function saveData() {
         const payload = {
-            mode: currentMode, 
+            zeitstempel: new Date().toISOString(),
             typ: document.getElementById('inp_typ').value,
             id: document.getElementById('inp_id').value, 
             pos: document.getElementById('inp_pos').value,
-            licht: document.getElementById('inp_licht').value, 
-            pol: document.getElementById('inp_pol').value,
-            spec_mode: document.getElementById('inp_spec_mode').value
+            mode: window.currentMode
         };
         fetch('/api/save_data', { 
             method: 'POST', 
             headers: {'Content-Type': 'application/json'}, 
             body: JSON.stringify(payload) 
-        })
-        .then(r => r.json())
-        .then(d => {
-            if(d.status === "success") alert("Gespeichert: " + d.file);
-            else alert("Fehler beim Speichern");
-        });
+        }).then(r => r.json()).then(d => alert("Gespeichert: " + d.status));
     }
-</script>   
+    
+    function updateLeds(leds) {
+        if(!leds) return;
+        if(leds.micro) document.getElementById('led_micro').style.background = leds.micro;
+        if(leds.spec)  document.getElementById('led_spec').style.background = leds.spec;
+        if(leds.clim)  document.getElementById('led_clim').style.background = leds.clim;
+    }
+</script> 
 </body>
 </html>
