@@ -116,20 +116,30 @@ cam.start_stream()
 start_watchdog()
 
 def arduino_bridge():
-    """Liest Arduino: T1\\tH1\\tT2\\tH2\\tGasAnalog\\tAlarm"""
+    """Liest Arduino: T1 H1 T2 H2 Gas (Filtert Textmeldungen lautlos)"""
+    ser = None
     while True:
         try:
-            ser = serial.Serial('/dev/ttyACM0', 115200, timeout=1)
-            dm.set_led("clim", "green")
-            while True:
-                line = ser.readline().decode('utf-8', errors='ignore').strip()
-                if line and "\t" in line:
-                    p = line.split("\t")
-                    if len(p) >= 5:
-                        # Mapping auf DataManager
+            if ser is None or not ser.is_open:
+                ser = serial.Serial('/dev/ttyACM0', 115200, timeout=1)
+                dm.set_led("clim", "green")
+            
+            line = ser.readline().decode('utf-8', errors='ignore').strip()
+            if line:
+                p = line.split() 
+                if len(p) >= 5:
+                    try:
+                        # Versuch der Konvertierung - klappt nur bei Zahlen
+                        # Mapping: T1 (0), T2 (2), RH1 (1), RH2 (3), Gas (4)
                         dm.update_sensors(float(p[0]), float(p[2]), float(p[1]), float(p[3]), int(p[4]))
-        except:
+                    except ValueError:
+                        # Alles was keine Zahl ist (Header, Kalibrierung), wird hier ignoriert
+                        pass
+        except Exception as e:
+            print(f"SERIAL ERROR: {e}")
             dm.set_led("clim", "red")
+            if ser: ser.close()
+            ser = None
             time.sleep(5)
 
 threading.Thread(target=arduino_bridge, daemon=True).start()
