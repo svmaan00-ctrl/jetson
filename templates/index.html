@@ -184,18 +184,26 @@
             </div>
 
         <div class="section-title">Betriebsmodus</div>
+
         <button class="nav-btn active" id="btn_micro" onclick="setMode('micro')">
             Mikroskopie <span class="gear-icon" onclick="toggleSubOpts('micro'); event.stopPropagation();">⚙</span>
         </button>
-        <div id="micro_sub_opts" style="display:none; padding-left:10px; margin-bottom:5px;"></div>
-            <button class="nav-btn" id="btn_spec" onclick="setMode('spec')">
-    Spektrometrie <span class="gear-icon" onclick="toggleSubOpts('spec'); event.stopPropagation();">⚙</span>
-            </button>
+        
+        <div id="micro_sub_opts" style="display:none; padding-left:10px; margin-bottom:5px;">
+            <button class="nav-btn" style="font-size:0.75rem;" onclick="setLight(1)">💡 Licht: AN</button>
+            <button class="nav-btn" style="font-size:0.75rem;" onclick="setLight(0)">🌑 Licht: AUS</button>
+        </div>
+
+        <button class="nav-btn" id="btn_spec" onclick="setMode('spec')">
+            Spektrometrie <span class="gear-icon" onclick="toggleSubOpts('spec'); event.stopPropagation();">⚙</span>
+        </button>
+        
         <div id="spec_sub_opts" style="display:none; padding-left:10px; margin-bottom:5px;">
             <select id="inp_spec_view" onchange="switchSpecView(this.value)" style="height:30px; font-size:0.8rem;">
-        <option value="raw">Rohdaten</option><option value="snv">SNV</option>
-    </select>
-</div>
+                <option value="raw">Ansicht: Rohdaten</option>
+                <option value="snv">Ansicht: Normiert (SNV)</option>
+            </select>
+        </div>
         <button class="nav-btn" id="btn_clim" onclick="setMode('clim')">
             Klimaüberwachung <span class="gear-icon" onclick="toggleSubOpts('clim'); event.stopPropagation();">⚙</span>
         </button>
@@ -441,6 +449,44 @@ function switchSpecView(view) {
     if (window.rawChart) window.rawChart.resize();
     if (window.snvChart) window.snvChart.resize();
 }
+
+    // --- 3. FEHLENDE FUNKTIONEN NACHGERÜSTET ---
+
+    // Freeze-Funktion (Ruft Backend auf)
+    function toggleFreeze() {
+        fetch('/api/freeze', { method: 'POST' })
+            .then(r => r.json())
+            .then(d => {
+                const btn = document.getElementById('btn_freeze');
+                if(d.frozen) {
+                    btn.innerText = "STANDBILD LÖSEN";
+                    btn.style.background = "#d32f2f"; // Rot
+                } else {
+                    btn.innerText = "STANDBILD AKTIVIEREN";
+                    btn.style.background = "#333"; // Grau
+                }
+            });
+    }
+
+    // Licht-Steuerung (Für die neuen Buttons im Zahnrad-Menü)
+    function setLight(state) {
+        fetch('/api/light', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({state: state})
+        }).then(console.log("Licht geschaltet:", state));
+    }
+
+    // LED-Status Updates (Wird vom SSE Stream aufgerufen)
+    function updateLeds(leds) {
+        if(!leds) return;
+        ['micro', 'spec', 'clim'].forEach(sys => {
+            const el = document.getElementById('led_' + sys);
+            if(el && leds[sys]) {
+                el.className = 'led ' + leds[sys]; // Setzt class="led green" etc.
+            }
+        });
+    }
 </script>   
 </body>
 </html>
