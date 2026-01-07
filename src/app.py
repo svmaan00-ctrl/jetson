@@ -1,6 +1,6 @@
 from flask import Flask, render_template, Response, request, jsonify
 from data_manager import DataManager
-from camera_engine import CameraEngine
+from lighting import DinoLightControl
 from file_monitor import start_watchdog
 from config import DIRS
 import serial
@@ -10,37 +10,32 @@ import subprocess
 import cv2
 from datetime import datetime
 import threading 
-from config import GST_PIPELINE, DIRS
-
-# Wichtig: GST_PIPELINE muss definiert sein (z.B. aus config.py oder hier)
-GST_GST_PIPELINE = "v4l2src device=/dev/video0 ! videoconvert ! video/x-raw, format=BGR ! appsink"
-
-import cv2
-import threading
-from config import GST_PIPELINE, DIRS
 
 class VideoCamera:
     def __init__(self):
-        # Initialisierung der GStreamer Pipeline für den Jetson
-        self.cap = cv2.VideoCapture(GST_PIPELINE, cv2.CAP_GSTREAMER)
+        # Wir nutzen V4L2 (Index 0), da dies in deinem Test stabil lief
+        # GStreamer macht hier Probleme, V4L2 ist direkt und sicher.
+        self.cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
+        
+        # WICHTIG: MJPG erzwingen (sonst bleibt das Bild bei hoher Auflösung schwarz)
+        self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 960)
+
         self.lock = threading.Lock()
         self.is_frozen = False
         self.last_frame = None
         
         if not self.cap.isOpened():
-            print("ERROR: Kamera konnte nicht mit GStreamer gestartet werden.")
+            print("ERROR: Kamera konnte nicht via V4L2 gestartet werden.")
         else:
-            # --- HARDWARE-INIT FÜR DINO-LITE HIER EINFÜGEN ---
+            # --- HARDWARE-INIT ---
             try:
-                # Setzt Arbeitshelligkeit (80 ist oft besser als 128 gegen Grieseln)
-                subprocess.run(['v4l2-ctl', '-d', '/dev/video0', '-c', 'brightness=80'], check=True)
-                # Schärfe leicht anheben
-                subprocess.run(['v4l2-ctl', '-d', '/dev/video0', '-c', 'sharpness=5'], check=True)
-                # Autofokus aus, damit das Bild stabil bleibt
-                subprocess.run(['v4l2-ctl', '-d', '/dev/video0', '-c', 'focus_automatic_continuous=0'], check=True)
-                print("--- DINO-LITE HARDWARE PARAMETER GESETZT ---")
+                # Helligkeit & Fokus via V4L2-Befehl setzen (Basis-Einstellungen)
+                subprocess.run(['v4l2-ctl', '-d', '/dev/video0', '-c', 'brightness=80'], check=False)
+                subprocess.run(['v4l2-ctl', '-d', '/dev/video0', '-c', 'focus_automatic_continuous=0'], check=False)
             except Exception as e:
-                print(f"WARNUNG: Hardware-Parameter konnten nicht gesetzt werden: {e}")
+                print(f"WARNUNG: V4L2-Settings fehlgeschlagen: {e}")
     
     def get_frame(self):
         with self.lock:
@@ -109,10 +104,11 @@ template_path = os.path.join(base_path, '..', 'templates')
 app = Flask(__name__, template_folder=template_path)
 
 dm = DataManager()
-cam = CameraEngine()
+# Wir nutzen die lokale Klasse VideoCamera statt der externen Engine
+cam = VideoCamera()
 
-# Start Hardware
-cam.start_stream()
+# Start Hardware (VideoCamera hat kein start_stream(), init passiert im __init__)
+# cam.start_stream() entfällt hier, da VideoCamera den Stream im Konstruktor öffnet
 start_watchdog()
 
 def arduino_bridge():

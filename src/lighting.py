@@ -18,7 +18,7 @@ class DinoLightControl:
         Dino-Lite nutzt meist Unit 4.
         """
         # Befehl zusammenbauen: uvcdynctrl -S 4:2 0xf201...
-        cmd =
+        cmd = ["uvcdynctrl", "-S", f"{unit}:{selector}", str(payload)]
         try:
             subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             return True
