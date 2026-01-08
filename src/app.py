@@ -1,4 +1,5 @@
 from flask import Flask, render_template, Response, request, jsonify
+import json
 from data_manager import DataManager
 from lighting import DinoLightControl
 from file_monitor import start_watchdog
@@ -168,6 +169,17 @@ def video_feed():
                 
     return Response(gen(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
+def emit_spectrum_file(filepath):
+    try:
+        with open(filepath, 'r') as f:
+            lines = [l.strip() for l in f.readlines() if l.strip()]
+        # Wir nutzen jetzt die neue Methode push_event
+        msg = f"data: {json.dumps({'type': 'new_spectrum_data', 'payload': {'raw': lines}})}\n\n"
+        dm.push_event(msg) 
+    except Exception as e:
+        print(f"🔴 SSE-Fehler: {e}")
+
+
 @app.route('/api/freeze', methods=['POST'])
 def freeze():
     return jsonify({"frozen": cam.toggle_freeze()})
@@ -176,34 +188,93 @@ def freeze():
 def save_data():
     data = request.json
     mode = data.get('mode')
+    
+    # Zeitstempel für Dateinamen
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    typ = data.get('typ', 'R')
-    id_val = data.get('id', 'ID').replace(" ", "_")
-    pos = data.get('pos', 'POS').replace(" ", "_")
+    
+    # Metadaten reinigen (Leerzeichen zu Unterstrichen)
+    typ = str(data.get('typ', 'R')).strip()
+    id_val = str(data.get('id', 'ID')).strip().replace(" ", "_")
+    pos = str(data.get('pos', 'POS')).strip().replace(" ", "_")
 
-    if mode == 'micro':
-        fn = f"{ts}_{typ}_{id_val}_{pos}_{data['licht']}_{data['pol']}.jpg"
-        path = os.path.join(DIRS['SNAPSHOTS'], fn)
-        if cam.take_snapshot(path): 
-            return jsonify({"status": "success", "file": fn})
+    # 1. ABSOLUTE PFADE DEFINIEREN (Hardcoded wie gewünscht)
+    base_dir = "/home/jetson/inspection_project/data"
+    path_micro = os.path.join(base_dir, "mikroskopbilder")
+    path_spec  = os.path.join(base_dir, "spektren")
+    path_clim  = os.path.join(base_dir, "klimadaten")
+
+    # 2. SICHERSTELLEN, DASS ORDNER EXISTIEREN
+    os.makedirs(path_micro, exist_ok=True)
+    os.makedirs(path_spec, exist_ok=True)
+    os.makedirs(path_clim, exist_ok=True)
+
+    try:
+        # --- FALL A: MIKROSKOP ---
+        if mode == 'micro':
+            # Format: YYYYMMDD_HHMMSS_Typ_ID_Pos_Licht_Pol.jpg
+            licht = data.get('licht', 'R')
+            pol = data.get('pol', 'Off')
+            fn = f"{ts}_{typ}_{id_val}_{pos}_{licht}_{pol}.jpg"
+            full_path = os.path.join(path_micro, fn)
             
-    elif mode == 'spec':
-        # Naming Scheme: YYYYMMDD_HHMMSS_TYP_ID_POS_Modus.abs
-        fn = f"{ts}_{typ}_{id_val}_{pos}_{data['spec_mode']}.abs"
-        # Wir geben 'pending' zurück, da der Watchdog im DataManager 
-        # die Datei verarbeitet, sobald sie im Ordner landet.
-        return jsonify({
-            "status": "pending", 
-            "info": "Warte auf Ingest durch Watchdog",
-            "expected_file": fn
-        })
+            # Snapshot auslösen
+            if cam.take_snapshot(full_path): 
+                print(f"✅ BILD GESPEICHERT: {full_path}")
+                return jsonify({"status": "success", "file": fn, "path": full_path})
+            else:
+                print("❌ FEHLER: Kamera konnte Bild nicht speichern.")
+                return jsonify({"status": "error", "message": "Kamerafehler"}), 500
 
-    elif mode == 'clim':
-        # LOG-Zeitraum_Bezeichnung_Ortsangabe_ID.csv
-        fn = f"LOG-{ts}_{typ}_{pos}_{id_val}.csv"
-        path = os.path.join(DIRS['CLIMATE'], fn)
-        # Hier käme deine CSV-Schreiblogik hin
-        return jsonify({"status": "success", "file": fn})
+        # --- FALL B: SPEKTRUM (VOLLSTÄNDIG) ---
+        elif mode == 'spec':
+            # 1. Dateinamen generieren (Mapping aus dem Frontend)
+            spec_mode = data.get('spec_mode', 'Abs')
+            fn = f"{ts}_{typ}_{id_val}_{pos}_{spec_mode}.abs"
+            full_path = os.path.join(path_spec, fn)
+            
+            # 2. DATEI SCHREIBEN
+            # Wir schreiben hier die Messdaten in die Datei.
+            # WICHTIG: Der Parser im Browser braucht pro Zeile: "NM WERT"
+            with open(full_path, 'w') as f:
+                f.write(f"Header: {ts} {typ} {id_val}\n") 
+                f.write("204.0 1.000E-01\n") # Testpunkt 1: Wellenlänge <Leertaste> Wert
+                f.write("204.75 1.200E-01\n") # Testpunkt 2 (0.75nm Schrittweite)
+                # Später: Hier schreibt die Hardware 1844 Zeilen rein.
+            
+            # 3. DER ENTSCHEIDENDE SCHRITT: DATEN AN STREAM SENDEN
+            # Diese Funktion liest die gerade gespeicherte Datei sofort wieder ein
+            # und schickt sie über den DataManager an den Browser-Graphen.
+            # Ohne diesen Aufruf bleibt die Anzeige im Frontend "tot".
+            emit_spectrum_file(full_path)
+            
+            print(f"✅ ERFOLG: Spektrum gespeichert unter {fn} und an UI gesendet.")
+            
+            # 4. ANTWORT AN DAS FRONTEND (Bestätigung für den Button-Klick)
+            return jsonify({
+                "status": "success", 
+                "info": "Datei gespeichert und Stream ausgelöst",
+                "file": fn
+            })
+
+        # --- FALL C: KLIMA ---
+        elif mode == 'clim':
+            # Format: LOG_Typ_ID_Pos.csv (Append Mode)
+            fn = f"LOG_{typ}_{id_val}.csv"
+            full_path = os.path.join(path_clim, fn)
+            
+            # Aktuelle Werte aus dem DataManager holen
+            vals = dm.current_values
+            line = f"{ts},{vals.get('t1',0)},{vals.get('t2',0)},{vals.get('rh1',0)},{vals.get('rh2',0)},{vals.get('gas',0)}\n"
+            
+            with open(full_path, 'a') as f: # 'a' für append (anhängen)
+                f.write(line)
+                
+            print(f"✅ KLIMA LOG GESCHRIEBEN: {full_path}")
+            return jsonify({"status": "success", "file": fn})
+
+    except Exception as e:
+        print(f"❌ SYSTEM FEHLER BEIM SPEICHERN: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
 
     return jsonify({"status": "error", "message": "Unbekannter Modus"}), 400
 

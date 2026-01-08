@@ -107,6 +107,7 @@ Netzwerk: STABIL (Statische IP 192.168.1.230, Power-Save OFF).Kamera: Einsatzber
 [x] Basic Layout Implementation mit Dark-Mode Dashboard.
 
 📦 AP 6: Hardware-Integration & Low-Level Fixes (In Arbeit)
+
 [x] Video-Engine Rewrite: Optimierte Pipeline für Orin Nano.
 
 [x] Legacy-Integration (M600): Physische Netzwerktrennung (192.168.10.x) auf eth0 etabliert.
@@ -117,19 +118,22 @@ Netzwerk: STABIL (Statische IP 192.168.1.230, Power-Save OFF).Kamera: Einsatzber
 
 [x] Strategie-Entscheidung: Physischer RDP-Zugriff ersetzt Virtual Machine.
 
-[ ]Integration in "systemaus" Alias (Jetson steuert Win7)
+[ ] Integration in "systemaus" Alias (Jetson steuert Win7)
+
 Der Jetson sendet den Abschaltbefehl über das Netzwerkkabel an den M600 und fährt sich danach selbst runter.
 
-[ ] LED-Steuerung (Linux): Implementierung via uvcdynctrl.
+[x] LED-Steuerung (Linux): Implementierung via uvcdynctrl (Frontend-Zwang auf "Always Green" für Mikroskop-Status).
 
 [ ] Sensor-Bridge Serial: Ausbau der Reconnect-Schleife für Arduino.
 
 📦 AP 6.5: Dynamische Kamera-Steuerung
+
 [ ] API-Route: Erstellung von /api/camera_control.
 
 [ ] Frontend-Slider: Integration der Schieberegler.
 
 📦 AP 7: Data Ingest & Storage Logic (In Bearbeitung)
+
 [x] Robustes Spectrum Parsing (Header-Skipping aktiv).
 
 [x] Watchdog Logik: Erkennt .abs, .trm und .ssm Dateien.
@@ -137,30 +141,37 @@ Der Jetson sendet den Abschaltbefehl über das Netzwerkkabel an den M600 und fä
 [x] Speicher-Funktion (Backend): /api/save_data sortiert nach DIRS.
 
 📦 AP 8: Mikroskopie-Features (Frontend)
-[ ] Freeze-Button: JS-Funktion für Standbild-Modus.
+
+[x] Freeze-Button: JS-Funktion für Standbild-Modus implementiert.
 
 [x] Dynamischer Maßstab: Canvas-Logik für pxPerMm und scaleFactor.
 
 [x] Kalibrierung: CALIBRATION Werte hinterlegt.
 
 📦 AP 9: Dashboard UX & Feedback (Deep-Level Integration)
-Status: Kritisch / In Bearbeitung Ziel: Orchestrierung der Modus-spezifischen Steuerelemente und Sicherstellung der grafischen Integrität bei Container-Wechseln.
+
+Status: Kritisch / In Bearbeitung
+
+Ziel: Orchestrierung der Modus-spezifischen Steuerelemente und Sicherstellung der grafischen Integrität bei Container-Wechseln.
 
 Technische Anforderungen & Herausforderungen:
 
-SNV-Dropdown-Synchronisation (Bugfix).
+[x] SNV-Dropdown-Synchronisation (Bugfix durch ID-Bereinigung).
 
-Canvas-Rescaling-Algorithmus (chart.resize() Trigger).
+[x] Canvas-Rescaling-Algorithmus (chart.resize() Trigger mit Timeout).
 
-Event-Bubbling-Protection.
+[x] Event-Bubbling-Protection (Zahnrad-Logik fixiert).
 
-Z-Score Mapping.
+[ ] Z-Score Mapping.
 
-Visuelles Feedback-System (.active-click Klasse).
+[ ] Visuelles Feedback-System (.active-click Klasse).
+
+[x] UI-Struktur: Sidebar auf 32px Höhe gestrafft, um Überlappungen zu vermeiden.
 
 [ ] Lade-Funktion: Browser für Bestandsdaten in data/.
 
 📦 AP 10: Final Deployment & Test
+
 [ ] Autostart: Einrichtung als systemd Service.
 
 [ ] Log-Rotation: Setup für Klimadaten-CSVs.
@@ -168,9 +179,41 @@ Visuelles Feedback-System (.active-click Klasse).
 [ ] System-Test: Validierung des kompletten Workflows.
 
 📦 AP 11: Analyse-Tools (Zukunft)
+
 Das System visualisiert das Spektrum ohne automatisierte Peak-Erkennung. Interpretation durch den Anwender.
 
 📦 AP 12: Spektrendiagramm-Validierung (Korrekturphase)
-Y-Achsen-Normalisierung.
 
-Baseline-Fix.
+[x] Live-Update: Datenintegration in rawChart und snvChart via SSE.
+
+[x] Achsen-Design: X-Achse (204-1586nm) mit 100nm-Schritten und 50nm-Marker-Punkten finalisiert.
+
+[x] Y-Achsen-Fix: Skalierung korrigiert (0,1 Schritte in  Linien).
+
+[ ] Y-Achsen-Normalisierung.
+
+[ ] Baseline-Fix.
+
+[ ] Ziel: Laden und Anzeigen von historischen Daten im Frontend.
+
+Die Aufgaben:
+
+Backend (Python):
+
+Neuer Endpunkt /api/list_files: Muss den Inhalt der Ordner (snapshots, spektren, logs) scannen und als JSON-Liste zurückgeben (filterbar nach ID oder Datum).
+
+Neuer Endpunkt /api/load_file: Muss die Rohdaten der gewählten Datei an das Frontend senden.
+
+Frontend (HTML/JS):
+
+Button „Archiv laden“: Neben dem Speicher-Button.
+
+Modal (Overlay-Fenster): Ein Pop-up, das die Dateiliste zeigt.
+
+Rendering:
+
+Bild: Ersetzt den Live-Stream durch das geladene Bild.
+
+Spektrum: Lädt die Kurve in den Chart.js Graphen.
+
+Klima: Zeigt den Verlauf aus dem Log an.

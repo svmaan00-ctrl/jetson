@@ -19,6 +19,20 @@ class DataManager:
     _instance = None
     _lock = threading.Lock()
 
+    def push_event(self, event_str):
+        """Verteilt den SSE-String an alle angemeldeten Listener."""
+        with self._lock:
+            for queue in self.listeners:
+                queue.put(event_str)
+
+    def listen(self):
+        """Erstellt eine neue Queue für einen Browser-Tab."""
+        from queue import Queue
+        q = Queue(maxsize=10)
+        with self._lock:
+            self.listeners.append(q)
+        return q
+
     def __new__(cls):
         if cls._instance is None:
             with cls._lock:

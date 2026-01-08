@@ -1,7 +1,6 @@
 ### 3. Sensor Bridge (src/sensor_bridge.py)
 ### Änderung:** Implementiert echte serielle Kommunikation mit Reconnect-Logik und Fehlerbehandlung für das TSV-Format.
 
-python
 import serial
 import time
 import threading
@@ -42,7 +41,7 @@ def sensor_loop(dm_instance, port='/dev/ttyACM0', baud=115200):
                 if len(parts) >= 6:
                     try:
                         data = {
-                            't1': float(parts),
+                            't1': float(parts[0]),
                             'rh1': float(parts[1]),
                             't2': float(parts[2]),
                             'rh2': float(parts[3]),
